@@ -1,4 +1,4 @@
-module core
+module github.com/donnigundala/dg-core
 
 go 1.25.0
 
