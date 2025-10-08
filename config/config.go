@@ -155,8 +155,11 @@ func unmarshalConfigs() error {
 	for key, cfg := range configRegistry {
 		t := fmt.Sprintf("%T", cfg)
 		parts := strings.Split(t, ".")
+		//typeName := strings.TrimSuffix(parts[len(parts)-1], "Config")
+		//prefix := strings.ToLower(typeName)
+
 		typeName := strings.TrimSuffix(parts[len(parts)-1], "Config")
-		prefix := strings.ToLower(typeName)
+		prefix := splitTypeNameToPrefix(typeName)
 
 		allSettings := viperInstance.AllSettings()
 		if _, ok := allSettings[prefix]; ok {
@@ -326,4 +329,17 @@ func debugPrint(key string, val interface{}, source string) {
 	if debugEnabled {
 		log.Printf("[CONFIG] %-30s = %-30v (%s)", key, val, source)
 	}
+}
+
+func splitTypeNameToPrefix(typeName string) string {
+	var words []string
+	start := 0
+	for i := 1; i < len(typeName); i++ {
+		if typeName[i] >= 'A' && typeName[i] <= 'Z' {
+			words = append(words, strings.ToLower(typeName[start:i]))
+			start = i
+		}
+	}
+	words = append(words, strings.ToLower(typeName[start:]))
+	return strings.Join(words, ".")
 }
