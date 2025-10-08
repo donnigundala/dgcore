@@ -142,7 +142,7 @@ func processLazyConfigs() {
 	for _, factory := range lazyConfigs {
 		cfg := factory()
 		key := reflect.TypeOf(cfg).String()
-		log.Printf("Processing lazy config: %s", key)
+		log.Printf("[CONFIG] Processing lazy config: %s", key)
 		configRegistry[key] = cfg
 	}
 }
