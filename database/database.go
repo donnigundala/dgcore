@@ -4,9 +4,9 @@ package database
 import (
 	"fmt"
 
-	"github.com/donnigundala/dg-frame/pkg/database/mongo"
-	"github.com/donnigundala/dg-frame/pkg/database/mysql"
-	"github.com/donnigundala/dg-frame/pkg/database/pgsql"
+	"github.com/donnigundala/dgcore/database/mongo"
+	"github.com/donnigundala/dgcore/database/mysql"
+	"github.com/donnigundala/dgcore/database/pgsql"
 )
 
 type Connector interface {

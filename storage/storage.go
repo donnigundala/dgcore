@@ -5,9 +5,9 @@ import (
 	"mime/multipart"
 	"net/url"
 
-	"github.com/donnigundala/dg-frame/pkg/storage/local"
-	"github.com/donnigundala/dg-frame/pkg/storage/minio"
-	"github.com/donnigundala/dg-frame/pkg/storage/s3"
+	"github.com/donnigundala/dgcore/storage/local"
+	"github.com/donnigundala/dgcore/storage/minio"
+	"github.com/donnigundala/dgcore/storage/s3"
 )
 
 type Storage interface {

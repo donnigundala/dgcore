@@ -1,9 +1,5 @@
 package pgsql
 
-import (
-	"github.com/donnigundala/dg-frame/configs"
-)
-
 type Config struct {
 	Host                  string `mapstructure:"host" json:"host" yaml:"host"`
 	Port                  string `mapstructure:"port" json:"port" yaml:"port"`
@@ -19,26 +15,26 @@ type Config struct {
 	Driver                string `mapstructure:"driver" json:"driver" yaml:"driver"`
 }
 
-func NewConfig(appCfg *configs.PgsqlConfig) *Config {
-	if appCfg == nil {
-		return &Config{}
-	}
-
-	return &Config{
-		Host:                  appCfg.Host,
-		Port:                  appCfg.Port,
-		Username:              appCfg.Username,
-		Password:              appCfg.Password,
-		Name:                  appCfg.Name,
-		Debug:                 appCfg.Debug,
-		Timezone:              appCfg.Timezone,
-		SSLMode:               appCfg.SSLMode,
-		MaxOpenConnection:     appCfg.MaxOpenConnection,
-		MaxConnectionLifetime: appCfg.MaxConnectionLifetime,
-		MaxIdleLifetime:       appCfg.MaxIdleLifetime,
-		Driver:                "pgsql",
-	}
-}
+//func NewConfig(appCfg *configs.PgsqlConfig) *Config {
+//	if appCfg == nil {
+//		return &Config{}
+//	}
+//
+//	return &Config{
+//		Host:                  appCfg.Host,
+//		Port:                  appCfg.Port,
+//		Username:              appCfg.Username,
+//		Password:              appCfg.Password,
+//		Name:                  appCfg.Name,
+//		Debug:                 appCfg.Debug,
+//		Timezone:              appCfg.Timezone,
+//		SSLMode:               appCfg.SSLMode,
+//		MaxOpenConnection:     appCfg.MaxOpenConnection,
+//		MaxConnectionLifetime: appCfg.MaxConnectionLifetime,
+//		MaxIdleLifetime:       appCfg.MaxIdleLifetime,
+//		Driver:                "pgsql",
+//	}
+//}
 
 func defaultConfig() *Config {
 	return &Config{
