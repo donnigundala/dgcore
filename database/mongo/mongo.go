@@ -60,12 +60,11 @@ func NewMongoDB(cfg *Config) (*Connector, error) {
 	}
 
 	log.Printf("[DATABASE] Connected to MongoDB URIs(%s)", strings.Join(cfg.Hosts, ","))
-	//return client, nil
 	return &Connector{Client: client, Config: cfg}, nil
 }
 
-func (c *Connector) Connect() (any, error) {
-	return NewMongoDB(c.Config)
+func (c *Connector) Connect() any {
+	return c.Client
 }
 
 func (c *Connector) Close() error {

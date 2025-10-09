@@ -10,7 +10,7 @@ import (
 )
 
 type Connector interface {
-	Connect() (any, error)
+	Connect() any
 	Close() error
 }
 
@@ -25,7 +25,7 @@ func NewDatabase(driver string, cfg any) (Connector, error) {
 		// Create a new PgSQL connector
 		db, err := pgsql.NewPostgres(pgsqlCfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create PgSQL connector: %w", err)
+			return nil, err
 		}
 		return db, nil
 	case "mysql":
@@ -37,7 +37,7 @@ func NewDatabase(driver string, cfg any) (Connector, error) {
 		// Create a new MySQL connector
 		db, err := mysql.NewMysql(mysqlCfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create MySQL connector: %w", err)
+			return nil, err
 		}
 		return db, nil
 	case "mongo":
@@ -49,7 +49,7 @@ func NewDatabase(driver string, cfg any) (Connector, error) {
 		// Create a new MongoDB connector
 		db, err := mongo.NewMongoDB(mongoCfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create MongoDB connector: %w", err)
+			return nil, err
 		}
 		return db, nil
 	default:

@@ -79,8 +79,8 @@ func NewMysql(cfg *Config) (*Connector, error) {
 	return &Connector{DB: db}, nil
 }
 
-func (c *Connector) Connect() (any, error) {
-	return c.DB, nil
+func (c *Connector) Connect() any {
+	return c.DB
 }
 
 func (c *Connector) Close() error {

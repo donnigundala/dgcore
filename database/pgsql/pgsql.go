@@ -73,12 +73,11 @@ func NewPostgres(cfg *Config) (*Connector, error) {
 	}
 
 	log.Printf("[PGSQL] Connected to %s:%s (db:%s)", cfg.Host, cfg.Port, cfg.Name)
-	//return db, nil
 	return &Connector{DB: db, Config: cfg}, nil
 }
 
-func (c *Connector) Connect() (any, error) {
-	return c.DB, nil
+func (c *Connector) Connect() any {
+	return c.DB
 }
 
 func (c *Connector) Close() error {
