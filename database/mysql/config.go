@@ -1,22 +1,21 @@
 package mysql
 
-// Config holds MySQL configuration.
 type Config struct {
-	Host                  string
-	Port                  string
-	Username              string
-	Password              string
-	Name                  string
-	Debug                 bool
-	Timezone              string
-	SSLMode               string
-	MaxOpenConnection     string
-	MaxConnectionLifetime string
-	MaxIdleLifetime       string
-	Driver                string
+	Host                  string `mapstructure:"host" json:"host" yaml:"host"`
+	Port                  string `mapstructure:"port" json:"port" yaml:"port"`
+	Username              string `mapstructure:"username" json:"username" yaml:"username"`
+	Password              string `mapstructure:"password" json:"password" yaml:"password"`
+	Name                  string `mapstructure:"name" json:"name" yaml:"name"`
+	Debug                 bool   `mapstructure:"debug" json:"debug" yaml:"debug"`
+	Timezone              string `mapstructure:"timezone" json:"timezone" yaml:"timezone"`
+	SSLMode               string `mapstructure:"ssl_mode" json:"ssl_mode" yaml:"ssl_mode"`
+	MaxOpenConnection     string `mapstructure:"max_open_connection" json:"max_open_connection" yaml:"max_open_connection"`
+	MaxConnectionLifetime string `mapstructure:"max_connection_lifetime" json:"max_connection_lifetime" yaml:"max_connection_lifetime"`
+	MaxIdleLifetime       string `mapstructure:"max_idle_lifetime" json:"max_idle_lifetime" yaml:"max_idle_lifetime"`
+	Driver                string `mapstructure:"driver" json:"driver" yaml:"driver"`
 }
 
-//func NewConfig(appCfg *newconfig.MysqlConfig) *Config {
+//func NewConfig(appCfg *configs.MysqlConfig) *Config {
 //	if appCfg == nil {
 //		return &Config{}
 //	}
