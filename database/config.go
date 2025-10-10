@@ -1,6 +1,6 @@
 // Package db provides a database provider/factory using GORM
 // for MySQL, PostgreSQL, and SQLite with best-practice defaults.
-package db
+package database
 
 import (
 	"fmt"
