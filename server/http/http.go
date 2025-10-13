@@ -13,7 +13,7 @@ type Http struct {
 }
 
 type IHttp interface {
-	GetServer() *http.Server
+	Server() *http.Server
 	Start() error
 	Shutdown() error
 	Close() error
@@ -54,8 +54,8 @@ func NewHttp(ctx context.Context, cfg *Config, handler http.Handler) *Http {
 	return srv
 }
 
-// GetServer get http server instance
-func (h *Http) GetServer() *http.Server {
+// Server get http server instance
+func (h *Http) Server() *http.Server {
 	return h.server
 }
 

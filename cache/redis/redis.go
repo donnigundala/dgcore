@@ -25,8 +25,8 @@ type Client struct {
 	Separator string
 }
 
-// New creates and initializes a Redis client using the provided configuration.
-func New(cfg *Config) *Client {
+// NewRedis creates and initializes a Redis client using the provided configuration.
+func NewRedis(cfg *Config) *Client {
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	options := &redis.Options{
 		Addr:     addr,

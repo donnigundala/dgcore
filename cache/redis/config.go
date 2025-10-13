@@ -33,3 +33,25 @@ func DefaultConfig() *Config {
 		Separator: ":",
 	}
 }
+
+func SetViperDefaultConfig(prefix *string) map[string]interface{} {
+	cfg := DefaultConfig()
+	// This function can be used to set default values in a Viper instance if needed.
+	p := "redis"
+	if prefix != nil && *prefix != "" {
+		p = *prefix
+	}
+	p = p + "."
+
+	return map[string]interface{}{
+		p + "host":       cfg.Host,
+		p + "port":       cfg.Port,
+		p + "username":   cfg.Username,
+		p + "password":   cfg.Password,
+		p + "db":         cfg.DB,
+		p + "ttl":        cfg.TTL.String(),
+		p + "enable_tls": cfg.EnableTLS,
+		p + "namespace":  cfg.Namespace,
+		p + "separator":  cfg.Separator,
+	}
+}

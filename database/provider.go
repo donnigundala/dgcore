@@ -22,15 +22,24 @@ import (
 
 // Provider wraps a GORM DB and its underlying *sql.DB with lifecycle helpers.
 type Provider struct {
-	Gorm *gorm.DB
-	SQL  *sql.DB
+	DB  *gorm.DB
+	SQL *sql.DB
+}
+
+// IProvider defines the interface for database providers.
+type IProvider interface {
+	GetDB() *gorm.DB
+	GetSQL() *sql.DB
+	Close() error
+	HealthCheck(ctx context.Context) error
+	Migrate(models ...interface{}) error
 }
 
 // New creates a new database connection using the provided Config.
 // It initializes GORM with best-practice defaults, sets pooling,
 // pings the DB, and optionally runs automigrations.
-func New(cfg Config, modelsForAutoMigrate ...interface{}) (*Provider, error) {
-	cfg.Defaults()
+func NewDatabase(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, error) {
+	//cfg.Defaults()
 
 	dsn, err := cfg.DSNFor()
 	if err != nil {
@@ -126,7 +135,7 @@ func New(cfg Config, modelsForAutoMigrate ...interface{}) (*Provider, error) {
 		}
 	}
 
-	p := &Provider{Gorm: db, SQL: sqlDB}
+	p := &Provider{DB: db, SQL: sqlDB}
 
 	// Optional automigrate (recommended only outside of strict prod flows)
 	if cfg.AutoMigrate && len(modelsForAutoMigrate) > 0 {
@@ -143,6 +152,14 @@ func pingWithTimeout(db *sql.DB, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return db.PingContext(ctx)
+}
+
+func (p *Provider) GetDB() *gorm.DB {
+	return p.DB
+}
+
+func (p *Provider) GetSQL() *sql.DB {
+	return p.SQL
 }
 
 // Close gracefully closes the underlying sql.DB.
@@ -164,10 +181,10 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 // Migrate runs GORM AutoMigrate over provided models.
 // Example: provider.Migrate(&User{}, &Order{})
 func (p *Provider) Migrate(models ...interface{}) error {
-	if p == nil || p.Gorm == nil {
+	if p == nil || p.DB == nil {
 		return errors.New("db not initialized")
 	}
-	return p.Gorm.AutoMigrate(models...)
+	return p.DB.AutoMigrate(models...)
 }
 
 func sleep(attempt int, base time.Duration) {

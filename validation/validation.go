@@ -9,6 +9,10 @@ type Validator struct {
 	validate *validator.Validate
 }
 
+type IValidator interface {
+	ValidateStruct(i interface{}) error
+}
+
 func NewValidator(db *gorm.DB) *Validator {
 	v := validator.New()
 

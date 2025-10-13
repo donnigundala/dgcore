@@ -13,13 +13,28 @@ type FCMClient struct {
 	client *messaging.Client
 }
 
-func NewFCM(firebase *Firebase) *FCMClient {
+type IFCMClient interface {
+	Send(ctx context.Context, msg FCMMessage) error
+	SendToTopic(ctx context.Context, topic string, msg FCMMessage) error
+	SendToMultipleTokens(ctx context.Context, msg FCMMessage, tokens []string) ([]string, error)
+	SubscribeToTopic(ctx context.Context, tokens []string, topic string) error
+	UnsubscribeFromTopic(ctx context.Context, tokens []string, topic string) error
+}
+
+// NewFCM initializes and returns a new FCMClient instance.
+func NewFCM(firebase *Firebase) (*FCMClient, error) {
 	client, err := firebase.App.Messaging(context.Background())
 	if err != nil {
-		log.Fatalf("[FCM] Failed to initialize messaging client: %v", err)
+		log.Println("[Firebase][FCM] Unable to initialize FCM Client:", err)
+		return nil, err
 	}
-	log.Println("[FCM] Messaging client initialized")
-	return &FCMClient{client: client}
+	log.Println("[Firebase][FCM] Messaging client initialized")
+	return &FCMClient{client: client}, nil
+}
+
+// FCMClient returns a new FCMClient instance from the Firebase app.
+func (fb *Firebase) FCMClient() (*FCMClient, error) {
+	return NewFCM(fb)
 }
 
 // -----------------------------------------------------
@@ -53,13 +68,13 @@ func (f *FCMClient) Send(ctx context.Context, msg FCMMessage) error {
 	if err != nil {
 		// Handle invalid token errors
 		if isInvalidTokenError(err) {
-			log.Printf("[FCM] Invalid or unregistered token: %s", msg.Token)
+			log.Printf("[Firebase][FCM] Invalid or unregistered token: %s", msg.Token)
 			return ErrInvalidToken
 		}
 		return err
 	}
 
-	log.Printf("[FCM] Message sent successfully: %s", resp)
+	log.Printf("[Firebase][FCM] Message sent successfully: %s", resp)
 	return nil
 }
 
@@ -83,7 +98,7 @@ func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg FCMMessag
 		return err
 	}
 
-	log.Printf("[FCM] Message sent to topic '%s': %s", topic, resp)
+	log.Printf("[Firebase][FCM] Message sent to topic '%s': %s", topic, resp)
 	return nil
 }
 
@@ -116,14 +131,14 @@ func (f *FCMClient) SendToMultipleTokens(ctx context.Context, msg FCMMessage, to
 		if !r.Success {
 			if isInvalidTokenError(r.Error) {
 				invalidTokens = append(invalidTokens, tokens[i])
-				log.Printf("[FCM] Invalid token detected: %s", tokens[i])
+				log.Printf("[Firebase][FCM] Invalid token detected: %s", tokens[i])
 			} else {
-				log.Printf("[FCM] Error sending to %s: %v", tokens[i], r.Error)
+				log.Printf("[Firebase][FCM] Error sending to %s: %v", tokens[i], r.Error)
 			}
 		}
 	}
 
-	log.Printf("[FCM] Successfully sent %d messages out of %d", resp.SuccessCount, len(tokens))
+	log.Printf("[Firebase][FCM] Successfully sent %d messages out of %d", resp.SuccessCount, len(tokens))
 	return invalidTokens, nil
 }
 
@@ -137,7 +152,7 @@ func (f *FCMClient) SubscribeToTopic(ctx context.Context, tokens []string, topic
 	if err != nil {
 		return err
 	}
-	log.Printf("[FCM] Subscribed %d tokens to topic '%s'", resp.SuccessCount, topic)
+	log.Printf("[Firebase][FCM] Subscribed %d tokens to topic '%s'", resp.SuccessCount, topic)
 	return nil
 }
 
@@ -146,7 +161,7 @@ func (f *FCMClient) UnsubscribeFromTopic(ctx context.Context, tokens []string, t
 	if err != nil {
 		return err
 	}
-	log.Printf("[FCM] Unsubscribed %d tokens from topic '%s'", resp.SuccessCount, topic)
+	log.Printf("[Firebase][FCM] Unsubscribed %d tokens from topic '%s'", resp.SuccessCount, topic)
 	return nil
 }
 
