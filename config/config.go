@@ -29,6 +29,7 @@ var debugEnabled = false
 // Defaultable defines config structs that can set default values.
 type Defaultable interface {
 	Defaults() map[string]interface{}
+	Prefix() string
 }
 
 // RegisterConfig registers a config struct or a factory (lazy load).
@@ -122,13 +123,15 @@ func applyDefaults() {
 
 	for _, cfg := range configRegistry {
 		if d, ok := cfg.(Defaultable); ok {
+			prefix := getPrefix(cfg)
 			for k, v := range d.Defaults() {
-				if !viperInstance.IsSet(k) {
-					viperInstance.SetDefault(k, v)
+				key := prefix + k
+				if !viperInstance.IsSet(key) {
+					viperInstance.SetDefault(key, v)
 					debugPrint(k, v, "DEFAULT")
 				}
-				if err := viperInstance.BindEnv(k); err != nil {
-					log.Printf("warning: failed to bind env for key %s: %v", k, err)
+				if err := viperInstance.BindEnv(key); err != nil {
+					log.Printf("warning: failed to bind env for key %s: %v", key, err)
 				}
 			}
 		}
@@ -153,22 +156,23 @@ func unmarshalConfigs() error {
 	defer mu.Unlock()
 
 	for key, cfg := range configRegistry {
-		t := fmt.Sprintf("%T", cfg)
-		parts := strings.Split(t, ".")
+		//t := fmt.Sprintf("%T", cfg)
+		//parts := strings.Split(t, ".")
 		//typeName := strings.TrimSuffix(parts[len(parts)-1], "Config")
 		//prefix := strings.ToLower(typeName)
 
-		typeName := strings.TrimSuffix(parts[len(parts)-1], "Config")
-		prefix := splitTypeNameToPrefix(typeName)
+		//typeName := strings.TrimSuffix(parts[len(parts)-1], "Config")
+		//prefix := splitTypeNameToPrefix(typeName)
+		//
+		//allSettings := viperInstance.AllSettings()
+		//if _, ok := allSettings[prefix]; ok {
+		//	if err := viperInstance.UnmarshalKey(prefix, cfg); err != nil {
+		//		return fmt.Errorf("failed to unmarshal section %s: %w", prefix, err)
+		//	}
+		//	//continue
+		//}
 
-		allSettings := viperInstance.AllSettings()
-		if _, ok := allSettings[prefix]; ok {
-			if err := viperInstance.UnmarshalKey(prefix, cfg); err != nil {
-				return fmt.Errorf("failed to unmarshal section %s: %w", prefix, err)
-			}
-			//continue
-		}
-
+		prefix := getPrefix(cfg)
 		val := reflect.ValueOf(cfg).Elem()
 		typ := val.Type()
 
@@ -179,7 +183,7 @@ func unmarshalConfigs() error {
 				tag = strings.ToLower(field.Name)
 			}
 
-			fullKey := fmt.Sprintf("%s.%s", prefix, tag)
+			fullKey := fmt.Sprintf("%s%s", prefix, tag)
 			envKey := strings.ToUpper(strings.ReplaceAll(fullKey, ".", "_"))
 
 			var finalVal interface{}
@@ -193,8 +197,9 @@ func unmarshalConfigs() error {
 					source = "YAML"
 				}
 			} else if d, ok := cfg.(Defaultable); ok {
+				// get from Defaults if exists
 				defaults := d.Defaults()
-				if defVal, ok := defaults[fullKey]; ok {
+				if defVal, ok := defaults[tag]; ok {
 					finalVal = defVal
 				}
 			}
@@ -342,4 +347,14 @@ func splitTypeNameToPrefix(typeName string) string {
 	}
 	words = append(words, strings.ToLower(typeName[start:]))
 	return strings.Join(words, ".")
+}
+
+func getPrefix(registry interface{}) string {
+	prefix := ""
+	if d, ok := registry.(Defaultable); ok {
+		if d.Prefix() != "" {
+			prefix = registry.(Defaultable).Prefix() + "."
+		}
+	}
+	return prefix
 }
