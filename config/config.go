@@ -17,29 +17,23 @@ import (
 )
 
 var (
-	viperInstance  *viper.Viper
 	mu             sync.RWMutex
 	configRegistry = make(map[string]interface{})
 	lazyConfigs    []func() interface{}
 	subscribers    []func()
 )
 
+var global *provider
 var debugEnabled = false
 
-// Defaultable defines config structs that can set default values.
-type Defaultable interface {
-	Defaults() map[string]interface{}
-	Prefix() string
-}
-
-// RegisterConfig registers a config struct or a factory (lazy load).
+// Register registers a config struct or a factory (lazy load).
 // Example:
 //
 //	config.RegisterConfig(&AppConfig{})          // direct
 //	config.RegisterConfig(func() interface{} {   // lazy
 //	    return &MongoConfig{}
 //	})
-func RegisterConfig(factory interface{}) {
+func Register(factory interface{}) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -52,11 +46,6 @@ func RegisterConfig(factory interface{}) {
 		log.Printf("Registering config: %s", key)
 		configRegistry[key] = factory
 	}
-}
-
-// Viper returns the active viper instance.
-func Viper() *viper.Viper {
-	return viperInstance
 }
 
 // Load loads config from file, .env, and applies defaults.
@@ -91,16 +80,14 @@ func Load(configPaths []string, configName string, envPrefix string) error {
 		}
 	}
 
-	viperInstance = v
-
 	// Apply defaults
-	applyDefaults()
+	applyDefaults(v)
 
 	// Process lazy configs (instantiate after viper ready)
 	processLazyConfigs()
 
 	// Unmarshal to registered configs
-	if err := unmarshalConfigs(); err != nil {
+	if err := unmarshalConfigs(v); err != nil {
 		return err
 	}
 
@@ -108,21 +95,22 @@ func Load(configPaths []string, configName string, envPrefix string) error {
 	v.WatchConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
 		log.Printf("config file changed: %s", e.Name)
-		if err := unmarshalConfigs(); err != nil {
+		if err := unmarshalConfigs(v); err != nil {
 			log.Printf("error reloading config: %v", err)
 		}
 		notifySubscribers()
 	})
 
+	global = &provider{v: v}
 	return nil
 }
 
-func applyDefaults() {
+func applyDefaults(viperInstance *viper.Viper) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	for _, cfg := range configRegistry {
-		if d, ok := cfg.(Defaultable); ok {
+		if d, ok := cfg.(IRegistrable); ok {
 			prefix := getPrefix(cfg)
 			for k, v := range d.Defaults() {
 				key := prefix + k
@@ -138,12 +126,35 @@ func applyDefaults() {
 	}
 }
 
+func Config() IConfig {
+	if global == nil {
+		log.Fatal("config not initialized. Call config.LoadAll() first.")
+	}
+	return global
+}
+
+func MustGet[T any](cfg T) T {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	key := fmt.Sprintf("%T", cfg)
+	if cfg, ok := configRegistry[key]; ok {
+		return cfg.(T)
+	}
+	panic(fmt.Sprintf("config %s not found", key))
+}
+
 func processLazyConfigs() {
 	mu.Lock()
 	defer mu.Unlock()
 
 	for _, factory := range lazyConfigs {
 		cfg := factory()
+		if cfg == nil {
+			log.Printf("[CONFIG] Warning: lazy config factory returned nil")
+			continue
+		}
+
 		key := reflect.TypeOf(cfg).String()
 		log.Printf("[CONFIG] Processing lazy config: %s", key)
 		configRegistry[key] = cfg
@@ -151,7 +162,7 @@ func processLazyConfigs() {
 }
 
 // unmarshalConfigs loads all registered configs into structs
-func unmarshalConfigs() error {
+func unmarshalConfigs(viperInstance *viper.Viper) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -196,7 +207,7 @@ func unmarshalConfigs() error {
 				} else {
 					source = "YAML"
 				}
-			} else if d, ok := cfg.(Defaultable); ok {
+			} else if d, ok := cfg.(IRegistrable); ok {
 				// get from Defaults if exists
 				defaults := d.Defaults()
 				if defVal, ok := defaults[tag]; ok {
@@ -305,17 +316,6 @@ func notifySubscribers() {
 	}
 }
 
-func MustGet[T any](cfg T) T {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	key := fmt.Sprintf("%T", cfg)
-	if cfg, ok := configRegistry[key]; ok {
-		return cfg.(T)
-	}
-	panic(fmt.Sprintf("config %s not found", key))
-}
-
 // Helper to load absolute path of .env (optional)
 func loadEnvFile(path string) {
 	if path == "" {
@@ -351,9 +351,9 @@ func splitTypeNameToPrefix(typeName string) string {
 
 func getPrefix(registry interface{}) string {
 	prefix := ""
-	if d, ok := registry.(Defaultable); ok {
+	if d, ok := registry.(IRegistrable); ok {
 		if d.Prefix() != "" {
-			prefix = registry.(Defaultable).Prefix() + "."
+			prefix = registry.(IRegistrable).Prefix() + "."
 		}
 	}
 	return prefix

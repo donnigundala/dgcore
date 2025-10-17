@@ -1,2 +1,7 @@
 .idea
 .vscode
+tmp/*
+# Ignore .DS_Store files everywhere in the repository
+.DS_Store
+# Or the more explicit pattern:
+**/.DS_Store

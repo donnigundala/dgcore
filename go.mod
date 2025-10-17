@@ -12,6 +12,7 @@ require (
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/joho/godotenv v1.5.1
 	github.com/minio/minio-go/v7 v7.0.95
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/spf13/viper v1.21.0
 	google.golang.org/api v0.252.0
