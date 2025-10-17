@@ -11,8 +11,15 @@ import (
 
 // Load reads config.yaml (if exists) and enables AutomaticEnv()
 // You may call LoadWithPaths to specify search paths.
-func Load() {
-	LoadWithPaths([]string{"./", "./configs"})
+func Load(paths ...string) {
+	defaultPaths := []string{"./", "./configs"}
+	if paths == nil {
+		for _, path := range defaultPaths {
+			paths = append(paths, path)
+		}
+	}
+
+	LoadWithPaths(defaultPaths)
 }
 
 func LoadWithPaths(paths []string) {

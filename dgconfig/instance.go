@@ -1,12 +1,9 @@
 package dgconfig
 
 import (
-	"log"
 	"path/filepath"
-	"strings"
 	"sync"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
@@ -27,21 +24,14 @@ func New() *Config {
 
 // Load loads YAML or env config files into this instance.
 func (c *Config) Load(paths ...string) error {
-	_ = godotenv.Load()
-	c.v.SetConfigName("config")
-	c.v.SetConfigType("yaml")
-	for _, p := range paths {
-		c.v.AddConfigPath(p)
+	defaultPaths := []string{"./", "./configs"}
+	if paths == nil {
+		for _, path := range defaultPaths {
+			paths = append(paths, path)
+		}
 	}
 
-	c.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	c.v.AutomaticEnv()
-
-	if err := c.v.ReadInConfig(); err == nil {
-		log.Printf("[CONFIG] Loaded from %s", c.v.ConfigFileUsed())
-	} else {
-		log.Printf("[CONFIG] No config file found, using defaults and environment")
-	}
+	LoadWithPaths(paths)
 	return nil
 }
 
