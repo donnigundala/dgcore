@@ -1,4 +1,4 @@
-package s3
+package dgs3
 
 type Config struct {
 	Region          string `mapstructure:"region" json:"region" yaml:"region"`

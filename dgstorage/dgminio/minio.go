@@ -1,4 +1,4 @@
-package minio
+package dgminio
 
 import (
 	"bytes"
@@ -20,8 +20,8 @@ type Storage struct {
 	cfg    *Config
 }
 
-// NewMinio Create new Minio storage
-func NewMinio(cfg *Config) (*Storage, error) {
+// New Create new Minio storage
+func New(cfg *Config) (*Storage, error) {
 	cli, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.Secure,

@@ -1,4 +1,4 @@
-package database
+package dgsql
 
 import (
 	"context"
@@ -7,40 +7,29 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/schema"
-	gormprom "gorm.io/plugin/prometheus"
-
-	// Dialectors
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
-
-	// Observability plugins
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 	gormotel "gorm.io/plugin/opentelemetry/tracing"
+	gormprom "gorm.io/plugin/prometheus"
 )
 
-// Provider wraps a GORM DB and its underlying *sql.DB with lifecycle helpers.
 type Provider struct {
-	DB  *gorm.DB
-	SQL *sql.DB
+	db  *gorm.DB
+	sql *sql.DB
 }
 
-// IProvider defines the interface for database providers.
 type IProvider interface {
-	GetDB() *gorm.DB
-	GetSQL() *sql.DB
+	DB() *gorm.DB
+	SQL() *sql.DB
 	Close() error
 	HealthCheck(ctx context.Context) error
 	Migrate(models ...interface{}) error
 }
 
-// New creates a new database connection using the provided Config.
-// It initializes GORM with best-practice defaults, sets pooling,
-// pings the DB, and optionally runs automigrations.
-func NewDatabase(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, error) {
-	//cfg.Defaults()
-
+func New(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, error) {
 	dsn, err := cfg.DSNFor()
 	if err != nil {
 		return nil, err
@@ -50,7 +39,7 @@ func NewDatabase(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, e
 	switch cfg.Driver {
 	case DriverMySQL:
 		dialector = mysql.Open(dsn)
-	case DriverPostgres:
+	case DriverPostgres, DriverPgSQL:
 		dialector = postgres.Open(dsn)
 	case DriverSQLite:
 		dialector = sqlite.Open(dsn)
@@ -135,7 +124,7 @@ func NewDatabase(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, e
 		}
 	}
 
-	p := &Provider{DB: db, SQL: sqlDB}
+	p := &Provider{db: db, sql: sqlDB}
 
 	// Optional automigrate (recommended only outside of strict prod flows)
 	if cfg.AutoMigrate && len(modelsForAutoMigrate) > 0 {
@@ -148,68 +137,37 @@ func NewDatabase(cfg *Config, modelsForAutoMigrate ...interface{}) (*Provider, e
 	return p, nil
 }
 
-func pingWithTimeout(db *sql.DB, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	return db.PingContext(ctx)
+// DB returns the underlying *gorm.DB instance.
+func (p *Provider) DB() *gorm.DB {
+	return p.db
 }
 
-func (p *Provider) GetDB() *gorm.DB {
-	return p.DB
-}
-
-func (p *Provider) GetSQL() *sql.DB {
-	return p.SQL
+// SQL returns the underlying *sql.DB instance.
+func (p *Provider) SQL() *sql.DB {
+	return p.sql
 }
 
 // Close gracefully closes the underlying sql.DB.
 func (p *Provider) Close() error {
-	if p == nil || p.SQL == nil {
+	if p == nil || p.sql == nil {
 		return nil
 	}
-	return p.SQL.Close()
+	return p.sql.Close()
 }
 
 // HealthCheck pings the DB using the provided context (with timeout recommended).
 func (p *Provider) HealthCheck(ctx context.Context) error {
-	if p == nil || p.SQL == nil {
+	if p == nil || p.sql == nil {
 		return errors.New("db not initialized")
 	}
-	return p.SQL.PingContext(ctx)
+	return p.sql.PingContext(ctx)
 }
 
 // Migrate runs GORM AutoMigrate over provided models.
 // Example: provider.Migrate(&User{}, &Order{})
 func (p *Provider) Migrate(models ...interface{}) error {
-	if p == nil || p.DB == nil {
+	if p == nil || p.db == nil {
 		return errors.New("db not initialized")
 	}
-	return p.DB.AutoMigrate(models...)
-}
-
-func sleep(attempt int, base time.Duration) {
-	// exponential backoff with jitter could be added; keep simple exponential for now
-	delay := base << attempt
-	if delay > 10*time.Second {
-		delay = 10 * time.Second
-	}
-	time.Sleep(delay)
-}
-
-func applySQLitePragmas(db *gorm.DB) error {
-	// WAL improves concurrency; busy_timeout prevents immediate SQLITE_BUSY errors
-	if err := db.Exec("PRAGMA journal_mode = WAL;").Error; err != nil {
-		return err
-	}
-	if err := db.Exec("PRAGMA busy_timeout = 5000;").Error; err != nil {
-		return err
-	}
-	return nil
-}
-
-func nonEmpty(s, fallback string) string {
-	if s == "" {
-		return fallback
-	}
-	return s
+	return p.db.AutoMigrate(models...)
 }

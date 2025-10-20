@@ -1,4 +1,4 @@
-package local
+package dglocal
 
 type Config struct {
 	BasePath string `mapstructure:"base_path" json:"base_path" yaml:"base_path"`

@@ -1,7 +1,7 @@
-// Package redis implements a production-ready Redis cache client.
+// Package dgredis Package redis implements a production-ready Redis cache client.
 // It follows the same modular structure as pkg/database/mysql or pgsql,
 // supporting config defaults, connection initialization, and graceful shutdown.
-package redis
+package dgredis
 
 import (
 	"context"
@@ -18,15 +18,13 @@ import (
 // Client
 // -----------------------------
 
-type Client struct {
-	Conn      *redis.Client
-	TTL       time.Duration
-	Namespace string
-	Separator string
+type Redis struct {
+	client *redis.Client
+	config *Config
 }
 
-// NewRedis creates and initializes a Redis client using the provided configuration.
-func NewRedis(cfg *Config) *Client {
+// New creates and initializes a Redis client using the provided configuration.
+func New(cfg *Config) *Redis {
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	options := &redis.Options{
 		Addr:     addr,
@@ -41,45 +39,43 @@ func NewRedis(cfg *Config) *Client {
 
 	rdb := redis.NewClient(options)
 
-	return &Client{
-		Conn:      rdb,
-		TTL:       cfg.TTL,
-		Namespace: cfg.Namespace,
-		Separator: cfg.Separator,
+	return &Redis{
+		client: rdb,
+		config: cfg,
 	}
 }
 
 // buildKey constructs the full key with namespace prefix.
-func (c *Client) buildKey(parts ...string) string {
-	key := strings.Join(parts, c.Separator)
-	if c.Namespace != "" {
-		return fmt.Sprintf("%s%s%s", c.Namespace, c.Separator, key)
+func (r *Redis) buildKey(parts ...string) string {
+	key := strings.Join(parts, r.config.Separator)
+	if r.config.Namespace != "" {
+		return fmt.Sprintf("%s%s%s", r.config.Namespace, r.config.Separator, key)
 	}
 	return key
 }
 
 // Ping verifies the Redis connection.
-func (c *Client) Ping(ctx context.Context) error {
-	return c.Conn.Ping(ctx).Err()
+func (r *Redis) Ping(ctx context.Context) error {
+	return r.client.Ping(ctx).Err()
 }
 
 // Set stores a key-value pair in Redis with optional expiration.
-func (c *Client) Set(ctx context.Context, key string, value any, ttl ...time.Duration) error {
-	expiration := c.TTL
+func (r *Redis) Set(ctx context.Context, key string, value any, ttl ...time.Duration) error {
+	expiration := r.config.TTL
 	if len(ttl) > 0 {
 		expiration = ttl[0]
 	}
-	return c.Conn.Set(ctx, c.buildKey(key), value, expiration).Err()
+	return r.client.Set(ctx, r.buildKey(key), value, expiration).Err()
 }
 
 // Get retrieves a string value by key.
-func (c *Client) Get(ctx context.Context, key string) (string, error) {
-	return c.Conn.Get(ctx, c.buildKey(key)).Result()
+func (r *Redis) Get(ctx context.Context, key string) (string, error) {
+	return r.client.Get(ctx, r.buildKey(key)).Result()
 }
 
 // Delete removes a key from Redis.
-func (c *Client) Delete(ctx context.Context, key string) error {
-	return c.Conn.Del(ctx, c.buildKey(key)).Err()
+func (r *Redis) Delete(ctx context.Context, key string) error {
+	return r.client.Del(ctx, r.buildKey(key)).Err()
 }
 
 // -----------------------------
@@ -87,17 +83,17 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 // -----------------------------
 
 // SetJSON stores a Go value as JSON in Redis.
-func (c *Client) SetJSON(ctx context.Context, key string, value any, ttl ...time.Duration) error {
+func (r *Redis) SetJSON(ctx context.Context, key string, value any, ttl ...time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	return c.Set(ctx, key, string(data), ttl...)
+	return r.Set(ctx, key, string(data), ttl...)
 }
 
 // GetJSON retrieves and unmarshals JSON data from Redis into the provided destination.
-func (c *Client) GetJSON(ctx context.Context, key string, dest any) error {
-	val, err := c.Get(ctx, key)
+func (r *Redis) GetJSON(ctx context.Context, key string, dest any) error {
+	val, err := r.Get(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
 			return nil // Key not found
@@ -113,17 +109,17 @@ func (c *Client) GetJSON(ctx context.Context, key string, dest any) error {
 
 // MGetJSON retrieves multiple keys and unmarshals each JSON value into the provided slice of destinations.
 // The length of dests must match the number of keys.
-func (c *Client) MGetJSON(ctx context.Context, keys []string, dests []any) error {
+func (r *Redis) MGetJSON(ctx context.Context, keys []string, dests []any) error {
 	if len(keys) != len(dests) {
 		return fmt.Errorf("MGetJSON: keys and destinations length mismatch")
 	}
 
 	var fullKeys []string
 	for _, k := range keys {
-		fullKeys = append(fullKeys, c.buildKey(k))
+		fullKeys = append(fullKeys, r.buildKey(k))
 	}
 
-	vals, err := c.Conn.MGet(ctx, fullKeys...).Result()
+	vals, err := r.client.MGet(ctx, fullKeys...).Result()
 	if err != nil {
 		return err
 	}
@@ -144,26 +140,26 @@ func (c *Client) MGetJSON(ctx context.Context, keys []string, dests []any) error
 }
 
 // MDelete removes multiple keys from Redis.
-func (c *Client) MDelete(ctx context.Context, keys ...string) error {
+func (r *Redis) MDelete(ctx context.Context, keys ...string) error {
 	if len(keys) == 0 {
 		return nil
 	}
 	var fullKeys []string
 	for _, k := range keys {
-		fullKeys = append(fullKeys, c.buildKey(k))
+		fullKeys = append(fullKeys, r.buildKey(k))
 	}
-	return c.Conn.Del(ctx, fullKeys...).Err()
+	return r.client.Del(ctx, fullKeys...).Err()
 }
 
 // ScanKeys scans and returns all keys matching a given pattern.
 // Example: pattern = "user:*" or "cache:session:*"
-func (c *Client) ScanKeys(ctx context.Context, pattern string, limit int64) ([]string, error) {
+func (r *Redis) ScanKeys(ctx context.Context, pattern string, limit int64) ([]string, error) {
 	var cursor uint64
 	var keys []string
-	fullPattern := c.buildKey(pattern)
+	fullPattern := r.buildKey(pattern)
 
 	for {
-		res, nextCursor, err := c.Conn.Scan(ctx, cursor, fullPattern, limit).Result()
+		res, nextCursor, err := r.client.Scan(ctx, cursor, fullPattern, limit).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -181,32 +177,32 @@ func (c *Client) ScanKeys(ctx context.Context, pattern string, limit int64) ([]s
 // -----------------------------
 
 // Incr increments an integer value by 1.
-func (c *Client) Incr(ctx context.Context, key string) (int64, error) {
-	return c.Conn.Incr(ctx, c.buildKey(key)).Result()
+func (r *Redis) Incr(ctx context.Context, key string) (int64, error) {
+	return r.client.Incr(ctx, r.buildKey(key)).Result()
 }
 
 // Decr decrements an integer value by 1.
-func (c *Client) Decr(ctx context.Context, key string) (int64, error) {
-	return c.Conn.Decr(ctx, c.buildKey(key)).Result()
+func (r *Redis) Decr(ctx context.Context, key string) (int64, error) {
+	return r.client.Decr(ctx, r.buildKey(key)).Result()
 }
 
 // Exists checks if one or more keys exist.
-func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
+func (r *Redis) Exists(ctx context.Context, keys ...string) (int64, error) {
 	var fullKeys []string
 	for _, k := range keys {
-		fullKeys = append(fullKeys, c.buildKey(k))
+		fullKeys = append(fullKeys, r.buildKey(k))
 	}
-	return c.Conn.Exists(ctx, fullKeys...).Result()
+	return r.client.Exists(ctx, fullKeys...).Result()
 }
 
 // Expire sets a TTL on a key.
-func (c *Client) Expire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
-	return c.Conn.Expire(ctx, c.buildKey(key), ttl).Result()
+func (r *Redis) Expire(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return r.client.Expire(ctx, r.buildKey(key), ttl).Result()
 }
 
 // Ttl returns the time to live of a key.
-func (c *Client) Ttl(ctx context.Context, key string) (time.Duration, error) {
-	return c.Conn.TTL(ctx, c.buildKey(key)).Result()
+func (r *Redis) Ttl(ctx context.Context, key string) (time.Duration, error) {
+	return r.client.TTL(ctx, r.buildKey(key)).Result()
 }
 
 // -----------------------------
@@ -214,8 +210,8 @@ func (c *Client) Ttl(ctx context.Context, key string) (time.Duration, error) {
 // -----------------------------
 
 // Close gracefully closes the Redis connection.
-func (c *Client) Close() error {
-	if err := c.Conn.Close(); err != nil {
+func (r *Redis) Close() error {
+	if err := r.client.Close(); err != nil {
 		return fmt.Errorf("failed to close Redis connection: %w", err)
 	}
 	return nil
@@ -233,6 +229,6 @@ func (c *Client) Close() error {
 //		log.Fatalf("❌ Redis connection failed: %v", err)
 //	}
 //
-//	log.Printf("✅ Connected to Redis at %s:%s (DB %d, namespace=%s)", cfg.Host, cfg.Port, cfg.DB, cfg.Namespace)
+//	log.Printf("✅ Connected to Redis at %s:%s (DB %d, namespace=%s)", cfg.Host, cfg.Port, cfg.DB, cfg.namespace)
 //	return client
 //}

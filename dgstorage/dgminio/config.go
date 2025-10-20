@@ -1,4 +1,4 @@
-package minio
+package dgminio
 
 type Config struct {
 	Endpoint  string `mapstructure:"endpoint" json:"endpoint" yaml:"endpoint"`

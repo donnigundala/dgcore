@@ -1,4 +1,4 @@
-package database
+package dgsql
 
 import (
 	"log"

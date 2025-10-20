@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -175,9 +176,19 @@ func AllKeys() []string {
 // PrintAll prints all registered keys and resolved values
 func PrintAll() {
 	log.Print("[CONFIG] ==== Registered Configs Value ====")
-	for _, k := range AllKeys() {
+
+	// 1. Get all keys and put them into a slice
+	keys := AllKeys()
+
+	// 2. Sort the slice of keys alphabetically
+	sort.Strings(keys)
+
+	// 3. Iterate over the sorted keys to print
+	for _, k := range keys {
+		// Ensure Get(k) is available and returns the config value
 		log.Printf("[CONFIG] %s = %v\n", k, Get(k))
 	}
+
 	log.Print("[CONFIG] ============================")
 }
 

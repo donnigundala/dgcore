@@ -1,9 +1,7 @@
-package seeder
+package dgseeder
 
 import (
 	"errors"
-	"log"
-	"os"
 
 	"gorm.io/gorm"
 )
@@ -21,7 +19,7 @@ import (
 //   if err != nil {
 //       log.Fatal(err)
 //   }
-//   s := seeder.NewSeeder(db)
+//   s := seeder.New(db)
 //   seeder.SetOrder([]string{"user", "product", "order"})
 //   if err := s.RunAll(); err != nil {
 //       log.Fatal(err)
@@ -51,29 +49,15 @@ import (
 
 // Seeder holds the GORM DB instance and a logger for seeding operations.
 type Seeder struct {
-	db     *gorm.DB
-	logger *log.Logger
+	db *gorm.DB
 }
 
-// ISeeder defines the interface for the Seeder struct.
-type ISeeder interface {
-	RunAll() error
-	RunOne(name string) error
-	RunAllWithTransaction() error
-	RunOneWithTransaction(name string) error
-	ListSeeders() []string
-	LogPrintf(format string, v ...any)
-	LogPrintln(v ...any)
-	LogPrint(v ...any)
-	LogFatalf(format string, v ...any)
-}
-
-// NewSeeder creates a new Seeder instance with the provided DB and a logger.
+// New creates a new Seeder instance with the provided DB and a logger.
 // The logger outputs to stdout with standard timestamp format.
-func NewSeeder(db *gorm.DB) *Seeder {
+func New(db *gorm.DB) *Seeder {
+
 	return &Seeder{
-		db:     db,
-		logger: log.New(os.Stdout, "", log.LstdFlags),
+		db: db,
 	}
 }
 
@@ -108,6 +92,19 @@ func Register(name string, fn SeedFunc) {
 //	seeder.SetOrder([]string{"user", "product", "order"})
 func SetOrder(order []string) {
 	seederOrder = order
+}
+
+// ListSeeders returns a list of registered seeder names in execution order if defined.
+func ListSeeders() []string {
+	if len(seederOrder) > 0 {
+		return seederOrder
+	}
+
+	names := make([]string, 0, len(seeders))
+	for name := range seeders {
+		names = append(names, name)
+	}
+	return names
 }
 
 // RunAll runs all registered seeders in the defined order.
@@ -195,17 +192,4 @@ func (s *Seeder) RunOneWithTransaction(name string) error {
 		})
 	}
 	return errors.New("seeder not found")
-}
-
-// ListSeeders returns a list of registered seeder names in execution order if defined.
-func ListSeeders() []string {
-	if len(seederOrder) > 0 {
-		return seederOrder
-	}
-
-	names := make([]string, 0, len(seeders))
-	for name := range seeders {
-		names = append(names, name)
-	}
-	return names
 }

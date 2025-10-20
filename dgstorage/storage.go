@@ -1,13 +1,13 @@
-package storage
+package dgstorage
 
 import (
 	"fmt"
 	"mime/multipart"
 	"net/url"
 
-	"github.com/donnigundala/dgcore/storage/local"
-	"github.com/donnigundala/dgcore/storage/minio"
-	"github.com/donnigundala/dgcore/storage/s3"
+	"github.com/donnigundala/dgcore/dgstorage/dglocal"
+	"github.com/donnigundala/dgcore/dgstorage/dgminio"
+	"github.com/donnigundala/dgcore/dgstorage/dgs3"
 )
 
 type Storage interface {
@@ -23,12 +23,11 @@ type Storage interface {
 func NewStorage(driver string, cfg any) (Storage, error) {
 	switch driver {
 	case "minio":
-		return minio.NewMinio(cfg.(*minio.Config))
+		return dgminio.New(cfg.(*dgminio.Config))
 	case "local":
-		return local.NewLocal(cfg.(*local.Config))
+		return dglocal.New(cfg.(*dglocal.Config))
 	case "s3":
-		return s3.NewS3(cfg.(*s3.Config))
-		//return NewS3(cfg)
+		return dgs3.New(cfg.(*dgs3.Config))
 	// case "gcs":
 	// 	return NewGCS(cfg)
 	default:

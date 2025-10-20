@@ -1,4 +1,4 @@
-package http
+package dghttp
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 )
 
 type Http struct {
-	cfg    *Config
 	server *http.Server
 	ctx    context.Context
+	cfg    *Config
 }
 
 type IHttp interface {
@@ -17,7 +17,7 @@ type IHttp interface {
 	Start() error
 	Shutdown() error
 	Close() error
-	String() string
+	Addr() string
 }
 
 func NewHttp(ctx context.Context, cfg *Config, handler http.Handler) *Http {
@@ -80,8 +80,8 @@ func (h *Http) Close() error {
 	return h.server.Close()
 }
 
-// String returns the server's address
-func (h *Http) String() string {
+// Addr returns the server's address
+func (h *Http) Addr() string {
 	return h.server.Addr
 }
 

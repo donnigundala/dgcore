@@ -1,4 +1,4 @@
-package local
+package dglocal
 
 import (
 	"fmt"
@@ -16,7 +16,8 @@ type Storage struct {
 	cfg      *Config
 }
 
-func NewLocal(cfg *Config) (*Storage, error) {
+// New Create new Local storage
+func New(cfg *Config) (*Storage, error) {
 	path := "storage"
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		err := os.MkdirAll(path, 0755)

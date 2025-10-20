@@ -1,4 +1,4 @@
-package s3
+package dgs3
 
 import (
 	"context"
@@ -20,7 +20,8 @@ type Storage struct {
 	cfg    *Config
 }
 
-func NewS3(cfg *Config) (*Storage, error) {
+// New Create new S3 storage
+func New(cfg *Config) (*Storage, error) {
 	awsCfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(cfg.Region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
