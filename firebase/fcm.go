@@ -3,87 +3,74 @@ package firebase
 import (
 	"context"
 	"errors"
-	"log"
-	"strings"
+	"log/slog"
 
 	"firebase.google.com/go/v4/messaging"
 )
 
-type FCMClient struct {
-	client *messaging.Client
-}
-
+// IFCMClient defines the interface for the FCM client.
 type IFCMClient interface {
-	Send(ctx context.Context, msg FCMMessage) error
-	SendToTopic(ctx context.Context, topic string, msg FCMMessage) error
-	SendToMultipleTokens(ctx context.Context, msg FCMMessage, tokens []string) ([]string, error)
+	Send(ctx context.Context, token string, msg *FCMMessage) error
+	SendToTopic(ctx context.Context, topic string, msg *FCMMessage) error
+	SendToMultipleTokens(ctx context.Context, tokens []string, msg *FCMMessage) ([]string, error)
 	SubscribeToTopic(ctx context.Context, tokens []string, topic string) error
 	UnsubscribeFromTopic(ctx context.Context, tokens []string, topic string) error
 }
 
-// NewFCM initializes and returns a new FCMClient instance.
-func NewFCM(firebase *Firebase) (*FCMClient, error) {
-	client, err := firebase.App.Messaging(context.Background())
-	if err != nil {
-		log.Println("[Firebase][FCM] Unable to initialize FCM Client:", err)
-		return nil, err
-	}
-	log.Println("[Firebase][FCM] Messaging client initialized")
-	return &FCMClient{client: client}, nil
+// FCMClient is a client for the Firebase Cloud Messaging service.
+type FCMClient struct {
+	client *messaging.Client
+	logger *slog.Logger
 }
 
 // FCMClient returns a new FCMClient instance from the Firebase app.
-func (fb *Firebase) FCMClient() (*FCMClient, error) {
-	return NewFCM(fb)
+func (fb *Firebase) FCMClient() (IFCMClient, error) {
+	client, err := fb.App.Messaging(context.Background())
+	if err != nil {
+		fb.logger.Error("Unable to initialize FCM Client", "error", err)
+		return nil, err
+	}
+
+	logger := fb.logger.With("component", "fcm")
+	logger.Info("Messaging client initialized")
+
+	return &FCMClient{client: client, logger: logger}, nil
 }
 
-// -----------------------------------------------------
-// Message struct for single-target messages
-// -----------------------------------------------------
-
-// FCMMessage represents the structure of a message to be sent via FCM.
+// FCMMessage represents the data and notification payload for an FCM message.
 type FCMMessage struct {
 	Title string
 	Body  string
-	Token string
 	Data  map[string]string
 }
 
-// -----------------------------------------------------
-// Send single message
-// -----------------------------------------------------
-
 // Send sends a push notification to a specific device token.
-func (f *FCMClient) Send(ctx context.Context, msg FCMMessage) error {
+func (f *FCMClient) Send(ctx context.Context, token string, msg *FCMMessage) error {
 	message := &messaging.Message{
 		Notification: &messaging.Notification{
 			Title: msg.Title,
 			Body:  msg.Body,
 		},
-		Token: msg.Token,
+		Token: token,
 		Data:  msg.Data,
 	}
 
 	resp, err := f.client.Send(ctx, message)
 	if err != nil {
-		// Handle invalid token errors
 		if isInvalidTokenError(err) {
-			log.Printf("[Firebase][FCM] Invalid or unregistered token: %s", msg.Token)
-			return ErrInvalidToken
+			f.logger.Warn("Invalid or unregistered token", "token", token, "error", err)
+			return ErrInvalidFCMToken
 		}
+		f.logger.Error("Failed to send message", "token", token, "error", err)
 		return err
 	}
 
-	log.Printf("[Firebase][FCM] Message sent successfully: %s", resp)
+	f.logger.Info("Message sent successfully", "response", resp)
 	return nil
 }
 
-// -----------------------------------------------------
-// Broadcast message to a topic (e.g., "news_updates")
-// -----------------------------------------------------
-
 // SendToTopic sends a push notification to all devices subscribed to a specific topic.
-func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg FCMMessage) error {
+func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg *FCMMessage) error {
 	message := &messaging.Message{
 		Notification: &messaging.Notification{
 			Title: msg.Title,
@@ -95,19 +82,16 @@ func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg FCMMessag
 
 	resp, err := f.client.Send(ctx, message)
 	if err != nil {
+		f.logger.Error("Failed to send message to topic", "topic", topic, "error", err)
 		return err
 	}
 
-	log.Printf("[Firebase][FCM] Message sent to topic '%s': %s", topic, resp)
+	f.logger.Info("Message sent to topic", "topic", topic, "response", resp)
 	return nil
 }
 
-// -----------------------------------------------------
-// Broadcast to multiple tokens (up to 500 tokens)
-// -----------------------------------------------------
-
 // SendToMultipleTokens sends a push notification to multiple device tokens.
-func (f *FCMClient) SendToMultipleTokens(ctx context.Context, msg FCMMessage, tokens []string) ([]string, error) {
+func (f *FCMClient) SendToMultipleTokens(ctx context.Context, tokens []string, msg *FCMMessage) ([]string, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided")
 	}
@@ -123,6 +107,7 @@ func (f *FCMClient) SendToMultipleTokens(ctx context.Context, msg FCMMessage, to
 
 	resp, err := f.client.SendEachForMulticast(ctx, batch)
 	if err != nil {
+		f.logger.Error("Failed to send multicast message", "error", err)
 		return nil, err
 	}
 
@@ -131,54 +116,43 @@ func (f *FCMClient) SendToMultipleTokens(ctx context.Context, msg FCMMessage, to
 		if !r.Success {
 			if isInvalidTokenError(r.Error) {
 				invalidTokens = append(invalidTokens, tokens[i])
-				log.Printf("[Firebase][FCM] Invalid token detected: %s", tokens[i])
+				f.logger.Warn("Invalid token detected in batch", "token", tokens[i], "error", r.Error)
 			} else {
-				log.Printf("[Firebase][FCM] Error sending to %s: %v", tokens[i], r.Error)
+				f.logger.Error("Error sending to token in batch", "token", tokens[i], "error", r.Error)
 			}
 		}
 	}
 
-	log.Printf("[Firebase][FCM] Successfully sent %d messages out of %d", resp.SuccessCount, len(tokens))
+	f.logger.Info("Multicast message sent", "success_count", resp.SuccessCount, "failure_count", resp.FailureCount)
 	return invalidTokens, nil
 }
-
-// -----------------------------------------------------
-// Subscribe / Unsubscribe tokens to topic
-// -----------------------------------------------------
 
 // SubscribeToTopic subscribes a list of device tokens to a specific topic.
 func (f *FCMClient) SubscribeToTopic(ctx context.Context, tokens []string, topic string) error {
 	resp, err := f.client.SubscribeToTopic(ctx, tokens, topic)
 	if err != nil {
+		f.logger.Error("Failed to subscribe to topic", "topic", topic, "error", err)
 		return err
 	}
-	log.Printf("[Firebase][FCM] Subscribed %d tokens to topic '%s'", resp.SuccessCount, topic)
+	f.logger.Info("Subscribed tokens to topic", "topic", topic, "count", resp.SuccessCount)
 	return nil
 }
 
+// UnsubscribeFromTopic unsubscribes a list of device tokens from a specific topic.
 func (f *FCMClient) UnsubscribeFromTopic(ctx context.Context, tokens []string, topic string) error {
 	resp, err := f.client.UnsubscribeFromTopic(ctx, tokens, topic)
 	if err != nil {
+		f.logger.Error("Failed to unsubscribe from topic", "topic", topic, "error", err)
 		return err
 	}
-	log.Printf("[Firebase][FCM] Unsubscribed %d tokens from topic '%s'", resp.SuccessCount, topic)
+	f.logger.Info("Unsubscribed tokens from topic", "topic", topic, "count", resp.SuccessCount)
 	return nil
 }
 
-// -----------------------------------------------------
-// Error Handling Helpers
-// -----------------------------------------------------
-
-// ErrInvalidToken indicates that the provided FCM token is invalid or unregistered.
-var ErrInvalidToken = errors.New("invalid or unregistered FCM token")
+// ErrInvalidFCMToken indicates that the provided FCM token is invalid or unregistered.
+var ErrInvalidFCMToken = errors.New("invalid or unregistered FCM token")
 
 // isInvalidTokenError checks if the error is related to an invalid or unregistered token.
 func isInvalidTokenError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "registration token is not a valid FCM registration token") ||
-		strings.Contains(msg, "Requested entity was not found") ||
-		strings.Contains(msg, "Unregistered")
+	return messaging.IsInvalidArgument(err) || messaging.IsRegistrationTokenNotRegistered(err) || messaging.IsUnregistered(err)
 }
