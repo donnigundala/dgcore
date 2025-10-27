@@ -1,4 +1,4 @@
-package dgconfig
+package config
 
 import (
 	"log"

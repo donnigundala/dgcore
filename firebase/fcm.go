@@ -1,4 +1,4 @@
-package dgfirebase
+package firebase
 
 import (
 	"context"

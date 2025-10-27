@@ -1,7 +1,7 @@
 // package config - production-grade config engine with Auto-Discovery & Auto-Inject
 // Put this file in: pkg/config/extended_config.go
 
-package dgconfig
+package config
 
 import (
 	"fmt"
