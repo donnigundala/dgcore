@@ -13,141 +13,90 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Example 1: Local Storage
-	fmt.Println("=== Local Storage Example ===")
-	demonstrateLocalStorage(ctx)
-
-	// Example 2: MinIO Storage
-	fmt.Println("\n=== MinIO Storage Example ===")
-	demonstrateMinIOStorage(ctx)
-
-	// Example 3: S3 Storage
-	fmt.Println("\n=== S3 Storage Example ===")
-	demonstrateS3Storage(ctx)
-}
-
-func demonstrateLocalStorage(ctx context.Context) {
-	factory := filesystem.NewFactory()
-
-	store, err := factory.Create("local", filesystem.LocalConfig{
-		BasePath: "./storage",
-		BaseURL:  "http://localhost:8080",
-		Secret:   "a-very-secure-secret-key-for-hmac",
-	})
-	if err != nil {
-		log.Fatalf("Failed to create local storage: %v", err)
+	// 1. Define your storage configuration for multiple disks.
+	config := filesystem.ManagerConfig{
+		Default: "local", // Specify the default disk
+		Disks: map[string]filesystem.Disk{
+			"local": {
+				Driver: "local",
+				Config: map[string]interface{}{
+					"basePath": "./storage",
+					"baseURL":  "http://localhost:8080",
+					"secret":   "a-very-secure-secret-key-for-hmac",
+				},
+			},
+			"s3_public": {
+				Driver: "s3",
+				Config: map[string]interface{}{
+					"bucket":    "your-public-s3-bucket", // <-- IMPORTANT: Change this
+					"region":    "us-east-1",
+					"accessKey": "YOUR_AWS_ACCESS_KEY", // <-- IMPORTANT: Change this
+					"secretKey": "YOUR_AWS_SECRET_KEY", // <-- IMPORTANT: Change this
+				},
+			},
+			"minio_private": {
+				Driver: "minio",
+				Config: map[string]interface{}{
+					"endpoint":        "localhost:9000",
+					"accessKeyID":     "minioadmin",
+					"secretAccessKey": "minioadmin",
+					"useSSL":          false,
+					"bucket":          "private-files",
+					"baseURL":         "http://localhost:9000",
+				},
+			},
+		},
 	}
 
-	// Upload a public file
-	publicData := strings.NewReader("This is a public file.")
-	publicKey := "public-image.jpg"
-	err = store.Upload(ctx, publicKey, publicData, int64(publicData.Len()), filesystem.Public)
+	// 2. Create the FileSystem manager from the configuration.
+	fs, err := filesystem.New(config)
 	if err != nil {
-		log.Fatalf("Failed to upload public file: %v", err)
-	}
-	fmt.Printf("✓ Uploaded public file: %s\n", publicKey)
-
-	// Upload a private file
-	privateData := strings.NewReader("This is a top-secret document.")
-	privateKey := "private-document.pdf"
-	err = store.Upload(ctx, privateKey, privateData, int64(privateData.Len()), filesystem.Private)
-	if err != nil {
-		log.Fatalf("Failed to upload private file: %v", err)
-	}
-	fmt.Printf("✓ Uploaded private file: %s\n", privateKey)
-
-	// Get URL for the public file
-	publicURL, err := store.GetURL(ctx, publicKey, filesystem.Public, 0)
-	if err != nil {
-		log.Fatalf("Failed to get public URL: %v", err)
-	}
-	fmt.Printf("✓ Public URL: %s\n", publicURL)
-
-	// Get a temporary signed URL for the private file
-	privateURL, err := store.GetURL(ctx, privateKey, filesystem.Private, 1*time.Hour)
-	if err != nil {
-		log.Fatalf("Failed to get signed URL: %v", err)
-	}
-	fmt.Printf("✓ Signed URL (valid for 1 hour): %s\n", privateURL)
-
-	// Clean up
-	store.Delete(ctx, publicKey)
-	store.Delete(ctx, privateKey)
-	fmt.Println("✓ Cleaned up files")
-}
-
-func demonstrateMinIOStorage(ctx context.Context) {
-	factory := filesystem.NewFactory()
-
-	store, err := factory.Create("minio", filesystem.MinIOConfig{
-		Endpoint:        "localhost:9000",
-		AccessKeyID:     "minioadmin",
-		SecretAccessKey: "minioadmin",
-		UseSSL:          false,
-		Bucket:          "my-test-bucket",
-		BaseURL:         "http://localhost:9000",
-	})
-	if err != nil {
-		log.Printf("Failed to create MinIO storage: %v (make sure MinIO is running)", err)
-		return
+		log.Fatalf("Failed to create filesystem manager: %v", err)
 	}
 
-	// Upload a public file
-	publicData := strings.NewReader("This is a public file for MinIO.")
-	publicKey := "public-image.jpg"
-	err = store.Upload(ctx, publicKey, publicData, int64(publicData.Len()), filesystem.Public)
+	fmt.Println("=== Filesystem Manager Example ===")
+
+	// 3. Use the manager to interact with different disks.
+
+	// --- Use the default disk ("local") ---
+	fmt.Println("\n--- Using default disk (local) ---")
+	localKey := "default-disk-file.txt"
+	localData := strings.NewReader("This file is on the default disk.")
+	err = fs.Upload(ctx, localKey, localData, int64(localData.Len()), filesystem.Public)
 	if err != nil {
-		log.Printf("Failed to upload public file to MinIO: %v", err)
-		return
-	}
-	fmt.Printf("✓ Uploaded public file to MinIO: %s\n", publicKey)
-
-	// Get URL for the public file
-	publicURL, err := store.GetURL(ctx, publicKey, filesystem.Public, 0)
-	if err != nil {
-		log.Printf("Failed to get public URL from MinIO: %v", err)
-		return
-	}
-	fmt.Printf("✓ Public URL from MinIO: %s\n", publicURL)
-
-	// Clean up
-	store.Delete(ctx, publicKey)
-	fmt.Println("✓ Cleaned up MinIO file")
-}
-
-func demonstrateS3Storage(ctx context.Context) {
-	factory := filesystem.NewFactory()
-
-	store, err := factory.Create("s3", filesystem.S3ConfigWithAuth{
-		Bucket:    "your-s3-bucket-name", // <-- IMPORTANT: Change this to your bucket name
-		Region:    "us-east-1",
-		AccessKey: "YOUR_AWS_ACCESS_KEY", // <-- IMPORTANT: Change this
-		SecretKey: "YOUR_AWS_SECRET_KEY", // <-- IMPORTANT: Change this
-	})
-	if err != nil {
-		log.Printf("Failed to create S3 storage: %v (configure AWS credentials)", err)
-		return
+		log.Printf("Failed to upload to default disk: %v", err)
+	} else {
+		fmt.Printf("✓ Uploaded '%s' to default disk.\n", localKey)
+		fs.Delete(ctx, localKey)
 	}
 
-	// Upload a private file
-	privateData := strings.NewReader("This is a private S3 document.")
-	privateKey := "private-document.pdf"
-	err = store.Upload(ctx, privateKey, privateData, int64(privateData.Len()), filesystem.Private)
+	// --- Use a specific disk by name ("s3_public") ---
+	fmt.Println("\n--- Using named disk (s3_public) ---")
+	s3Key := "images/avatar.jpg"
+	s3Data := strings.NewReader("This is a public S3 file.")
+	err = fs.Disk("s3_public").Upload(ctx, s3Key, s3Data, int64(s3Data.Len()), filesystem.Public)
 	if err != nil {
-		log.Printf("Failed to upload private file to S3: %v", err)
-		return
+		log.Printf("Failed to upload to s3_public disk: %v (check config)", err)
+	} else {
+		fmt.Printf("✓ Uploaded '%s' to s3_public disk.\n", s3Key)
+		// Get public URL
+		url, _ := fs.Disk("s3_public").GetURL(ctx, s3Key, filesystem.Public, 0)
+		fmt.Printf("✓ Public S3 URL: %s\n", url)
+		fs.Disk("s3_public").Delete(ctx, s3Key)
 	}
-	fmt.Printf("✓ Uploaded private file to S3: %s\n", privateKey)
 
-	// Get a temporary signed URL for the private file
-	privateURL, err := store.GetURL(ctx, privateKey, filesystem.Private, 15*time.Minute)
+	// --- Use another specific disk ("minio_private") ---
+	fmt.Println("\n--- Using named disk (minio_private) ---")
+	minioKey := "reports/2023-annual-report.pdf"
+	minioData := strings.NewReader("This is a private MinIO document.")
+	err = fs.Disk("minio_private").Upload(ctx, minioKey, minioData, int64(minioData.Len()), filesystem.Private)
 	if err != nil {
-		log.Printf("Failed to get signed URL from S3: %v", err)
-		return
+		log.Printf("Failed to upload to minio_private disk: %v (check if MinIO is running)", err)
+	} else {
+		fmt.Printf("✓ Uploaded '%s' to minio_private disk.\n", minioKey)
+		// Get signed URL
+		url, _ := fs.Disk("minio_private").GetURL(ctx, minioKey, filesystem.Private, 15*time.Minute)
+		fmt.Printf("✓ Signed MinIO URL (valid 15 mins): %s\n", url)
+		fs.Disk("minio_private").Delete(ctx, minioKey)
 	}
-	fmt.Printf("✓ Signed URL from S3 (valid for 15 minutes): %s\n", privateURL)
-
-	// Clean up
-	store.Delete(ctx, privateKey)
-	fmt.Println("✓ Cleaned up S3 file")
 }

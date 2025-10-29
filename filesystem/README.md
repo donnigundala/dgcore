@@ -1,117 +1,110 @@
 # Filesystem Abstraction Layer
 
-A flexible, extensible filesystem abstraction layer for Go, inspired by Laravel's filesystem. It supports multiple storage drivers like local, MinIO, and AWS S3 with a unified, expressive API.
+A flexible, extensible filesystem abstraction layer for Go, inspired by Laravel's filesystem. It supports multiple storage drivers, public/private visibility, and a unified API for managing all your storage needs.
 
 ## Features
 
-- **Multiple Drivers**: Switch between `local`, `minio`, and `s3` storage.
-- **Unified Interface**: A single `Storage` interface for all drivers.
+- **Multi-Disk Management**: Configure and manage multiple storage disks (`local`, `s3`, `minio`, etc.) at once.
+- **Unified API**: Interact with any disk using a single, consistent API.
 - **Public & Private Visibility**: Control file visibility with `filesystem.Public` and `filesystem.Private`.
-- **Unified URL Generation**: A single `GetURL` method that returns a public URL for public files or a temporary signed URL for private files.
+- **Unified URL Generation**: A single `GetURL` method returns a public URL for public files or a temporary signed URL for private ones.
 - **Easy to Extend**: Add new drivers by implementing the `Storage` interface.
-- **Factory Pattern**: Simple driver instantiation via a factory.
 
 ## Installation
 
 ```bash
-go get github.com/aws/aws-sdk-go-v2
-go get github.com/minio/minio-go/v7
+go get github.com/donnigundala/dg-framework/core/filesystem
 ```
 
 ## Quick Start
 
-### 1. Create a Factory
+### 1. Define Your Configuration
+
+Create a configuration that defines all your storage "disks". This can be loaded from a JSON/YAML file or defined in code.
 
 ```go
-import "path/to/your/project/core/filesystem"
+import "github.com/donnigundala/dg-framework/core/filesystem"
 
-factory := filesystem.NewFactory()
-```
-
-### 2. Configure a Driver
-
-#### Local Storage
-
-```go
-localCfg := filesystem.LocalConfig{
-    BasePath: "./storage",
-    BaseURL:  "http://localhost:8080",
-    Secret:   "a-very-secure-secret-key",
+config := filesystem.ManagerConfig{
+    Default: "local", // Specify the default disk
+    Disks: map[string]filesystem.Disk{
+        "local": {
+            Driver: "local",
+            Config: map[string]interface{}{
+                "basePath": "./storage",
+                "baseURL":  "http://localhost:8080",
+                "secret":   "a-very-secure-secret-key",
+            },
+        },
+        "s3_public": {
+            Driver: "s3",
+            Config: map[string]interface{}{
+                "bucket":    "my-public-assets-bucket",
+                "region":    "us-east-1",
+                "accessKey": "YOUR_AWS_ACCESS_KEY",
+                "secretKey": "YOUR_AWS_SECRET_KEY",
+            },
+        },
+        "minio_private": {
+            Driver: "minio",
+            Config: map[string]interface{}{
+                "endpoint":        "localhost:9000",
+                "accessKeyID":     "minioadmin",
+                "secretAccessKey": "minioadmin",
+                "useSSL":          false,
+                "bucket":          "private-documents",
+                "baseURL":         "http://localhost:9000",
+            },
+        },
+    },
 }
-
-store, err := factory.Create("local", localCfg)
 ```
 
-#### AWS S3 Storage
+### 2. Create the FileSystem Manager
+
+Create a single `FileSystem` manager instance from your configuration.
 
 ```go
-s3Cfg := filesystem.S3ConfigWithAuth{
-    Bucket:    "my-s3-bucket",
-    Region:    "us-east-1",
-    AccessKey: "YOUR_AWS_ACCESS_KEY",
-    SecretKey: "YOUR_AWS_SECRET_KEY",
+fs, err := filesystem.New(config)
+if err != nil {
+    log.Fatalf("Failed to create filesystem manager: %v", err)
 }
-
-store, err := factory.Create("s3", s3Cfg)
 ```
 
-#### MinIO Storage
+### 3. Use the Manager
 
-```go
-minioCfg := filesystem.MinIOConfig{
-    Endpoint:        "localhost:9000",
-    AccessKeyID:     "minioadmin",
-    SecretAccessKey: "minioadmin",
-    UseSSL:          false,
-    Bucket:          "my-minio-bucket",
-    BaseURL:         "http://localhost:9000",
-}
-
-store, err := factory.Create("minio", minioCfg)
-```
-
-### 3. Use the Storage Driver
+Now you can interact with any of your configured disks.
 
 ```go
 ctx := context.Background()
-data := strings.NewReader("This is a test file.")
 
-// Upload a public file
-err = store.Upload(ctx, "public/avatar.txt", data, int64(data.Len()), filesystem.Public)
+// --- Use the default disk ("local") ---
+data := strings.NewReader("Default disk content.")
+err = fs.Upload(ctx, "default-file.txt", data, int64(data.Len()), filesystem.Public)
 
-// Upload a private file
-err = store.Upload(ctx, "private/document.pdf", data, int64(data.Len()), filesystem.Private)
+// --- Use a specific disk by name ---
+data = strings.NewReader("Public S3 content.")
+err = fs.Disk("s3_public").Upload(ctx, "images/avatar.jpg", data, int64(data.Len()), filesystem.Public)
 
-// Get URL for the public file
-// Output: http://localhost:8080/public/avatar.txt (for local driver)
-publicURL, err := store.GetURL(ctx, "public/avatar.txt", filesystem.Public, 0)
+// --- Get a URL from a specific disk ---
+// This will be a public URL because the file was uploaded with Public visibility.
+url, err := fs.Disk("s3_public").GetURL(ctx, "images/avatar.jpg", filesystem.Public, 0)
 
-// Get a temporary signed URL for the private file (valid for 1 hour)
-// Output: A signed URL with an expiration
-privateURL, err := store.GetURL(ctx, "private/document.pdf", filesystem.Private, 1*time.Hour)
+// --- Get a signed URL for a private file ---
+data = strings.NewReader("Private MinIO content.")
+err = fs.Disk("minio_private").Upload(ctx, "reports/annual.pdf", data, int64(data.Len()), filesystem.Private)
 
-// Download a file
-reader, err := store.Download(ctx, "public/avatar.txt")
-if err == nil {
-    defer reader.Close()
-    // ... read the content
-}
+privateURL, err := fs.Disk("minio_private").GetURL(ctx, "reports/annual.pdf", filesystem.Private, 15*time.Minute)
 ```
 
-## Storage Interface
+## Architecture
 
-All drivers implement this interface:
+The package is composed of two main components:
 
-```go
-type Storage interface {
-    Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error
-    Download(ctx context.Context, key string) (io.ReadCloser, error)
-    Delete(ctx context.Context, key string) error
-    Exists(ctx context.Context, key string) (bool, error)
-    GetURL(ctx context.Context, key string, visibility Visibility, duration time.Duration) (string, error)
-    List(ctx context.Context, prefix string) ([]string, error)
-}
-```
+1.  **The `FileSystem` Manager (`manager.go`)**: The top-level entry point that holds and manages all configured storage disks.
+2.  **The `Storage` Interface (`interface.go`)**: A standard interface that defines the contract for all storage drivers. Each driver (`local.go`, `s3.go`, `minio.go`) is an implementation of this interface.
+
+The manager uses a `Factory` (`factory.go`) internally to create the individual driver instances based on your configuration.
 
 ## Visibility and URLs
 
@@ -120,41 +113,14 @@ The `GetURL` method provides a unified way to get a URL for a file, abstracting 
 - **`filesystem.Public`**: When you upload a file with `Public` visibility, `GetURL` will return a permanent, publicly accessible URL.
 - **`filesystem.Private`**: When you upload a file with `Private` visibility, `GetURL` will return a temporary, signed URL that grants access for a limited time.
 
-```go
-// Get a direct public URL
-// The duration parameter is ignored for public files
-url, err := store.GetURL(ctx, "image.jpg", filesystem.Public, 0)
-
-// Get a signed URL valid for 15 minutes
-url, err := store.GetURL(ctx, "report.pdf", filesystem.Private, 15*time.Minute)
-```
-
-### Validating Local Storage Signed URLs
-
-For the `local` driver, you can validate incoming signed URLs in your HTTP handler:
-
-```go
-// Assume `localStore` is your instantiated LocalStorage driver
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-    expires := r.URL.Query().Get("expires")
-    signature := r.URL.Query().Get("signature")
-    urlPath := r.URL.Path
-
-    if localStore.VerifySignedURL(urlPath, expires, signature) {
-        // URL is valid and not expired - serve the file
-    } else {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-    }
-}
-```
-
 ## Adding a New Driver
 
 To add a new storage driver (e.g., Google Cloud Storage):
 
 1.  **Implement the `Storage` interface** in a new file (e.g., `filesystem/gcs.go`).
-2.  **Update the factory** in `filesystem/factory.go` to include a new case for your driver.
-3.  **Use it** by passing the new driver type and config to `factory.Create()`.
+2.  **Update the factory** in `filesystem/factory.go` to include a `case` for your new driver.
+3.  **Update the `convertConfig` function** in `filesystem/manager.go` to handle your new driver's configuration.
+4.  You can now add the driver to your `ManagerConfig`.
 
 ## License
 

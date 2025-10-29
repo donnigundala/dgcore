@@ -79,7 +79,8 @@ func (ms *MinIOStorage) Delete(ctx context.Context, key string) error {
 func (ms *MinIOStorage) Exists(ctx context.Context, key string) (bool, error) {
 	_, err := ms.client.StatObject(ctx, ms.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
-		if minio.IsErrCodeNoSuchKey(err) {
+		errResp := minio.ToErrorResponse(err)
+		if errResp.Code == "NoSuchKey" {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to check object existence: %w", err)

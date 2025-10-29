@@ -159,7 +159,7 @@ func (ls *LocalStorage) getPublicURL(key string) string {
 
 // getSignedURL generates a temporary signed URL for a private object.
 func (ls *LocalStorage) getSignedURL(ctx context.Context, key string, duration time.Duration) (string, error) {
-	path, visibility, err := ls.findFile(key)
+	_, visibility, err := ls.findFile(key)
 	if err != nil {
 		return "", err
 	}
