@@ -23,19 +23,3 @@ type FilesystemError struct {
 func (e *FilesystemError) Error() string { return e.Msg }
 
 func NewFilesystemError(msg string) error { return &FilesystemError{Msg: msg} }
-
-// Convenience: config structs used by converters/drivers
-type LocalConfig struct {
-	BasePath string
-	BaseURL  string
-	Secret   string
-}
-
-type MinIOConfig struct {
-	Endpoint        string
-	AccessKeyID     string
-	SecretAccessKey string
-	UseSSL          bool
-	Bucket          string
-	BaseURL         string
-}

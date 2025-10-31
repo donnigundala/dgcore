@@ -2,20 +2,28 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
+	"os"
 	"strings"
-	"time"
 
 	"github.com/donnigundala/dgcore/filesystems"
+	"github.com/google/uuid"
 )
 
-func main() {
-	ctx := context.Background()
+// In a real application, this would be defined in a shared internal package.
+type CtxKey string
 
-	// 1. Define your storage configuration for multiple disks.
+const TraceIDKey = CtxKey("trace_id")
+
+func main() {
+	// 1. Create a logger.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
+	// 2. Define your storage configuration.
 	config := filesystems.ManagerConfig{
-		Default: "local", // Specify the default disk
+		Default: "local",
 		Disks: map[string]filesystems.Disk{
 			"local": {
 				Driver: "local",
@@ -27,77 +35,42 @@ func main() {
 			"s3_public": {
 				Driver: "s3",
 				Config: map[string]interface{}{
-					"bucket":    "your-public-s3-bucket", // <-- IMPORTANT: Change this
+					"bucket":    "your-public-s3-bucket",
 					"region":    "us-east-1",
-					"accessKey": "YOUR_AWS_ACCESS_KEY", // <-- IMPORTANT: Change this
-					"secretKey": "YOUR_AWS_SECRET_KEY", // <-- IMPORTANT: Change this
+					"accessKey": "YOUR_AWS_ACCESS_KEY",
+					"secretKey": "YOUR_AWS_SECRET_KEY",
 					"baseURL":   "https://your-public-s3-bucket.s3.us-east-1.amazonaws.com",
-				},
-			},
-			"s3_private": {
-				Driver: "s3",
-				Config: map[string]interface{}{
-					"bucket":    "your-private-s3-bucket", // <-- IMPORTANT: Change this
-					"region":    "us-east-1",
-					"accessKey": "YOUR_AWS_ACCESS_KEY", // <-- IMPORTANT: Change this
-					"secretKey": "YOUR_AWS_SECRET_KEY", // <-- IMPORTANT: Change this
 				},
 			},
 		},
 	}
 
-	// 2. Create the FileSystem manager from the configuration.
-	fs, err := filesystems.New(config)
+	// 3. Create the FileSystem manager, providing the logger and trace ID key as options.
+	fs, err := filesystems.New(config,
+		filesystems.WithLogger(logger),
+		filesystems.WithTraceIDKey(TraceIDKey),
+	)
 	if err != nil {
-		log.Fatalf("Failed to create filesystem manager: %v", err)
+		logger.Error("Failed to create filesystem manager", "error", err)
+		os.Exit(1)
 	}
 
-	fmt.Println("=== Filesystem Manager Example ===")
+	logger.Info("=== Filesystem Manager Example Starting ===")
 
-	// 3. Use the manager to interact with different disks.
+	// 4. Create a context with a trace ID.
+	traceID := uuid.New().String()
+	ctx := context.WithValue(context.Background(), TraceIDKey, traceID)
 
-	// --- Use the default disk ("local") ---
-	fmt.Println("\n--- Using default disk (local) ---")
-	localKey := "default-disk-file.txt"
-	localData := strings.NewReader("This file is on the default disk.")
+	logger.InfoContext(ctx, "Starting file operations with trace ID")
+
+	// 5. Use the manager. The trace ID will now be automatically included in all logs.
+	localKey := "example-file.txt"
+	localData := strings.NewReader("This file will have a trace ID in its logs.")
 	err = fs.Upload(ctx, localKey, localData, int64(localData.Len()), filesystems.VisibilityPublic)
 	if err != nil {
-		log.Printf("Failed to upload to default disk: %v", err)
+		logger.ErrorContext(ctx, "Failed to upload file", "key", localKey, "error", err)
 	} else {
-		fmt.Printf("✓ Uploaded '%s' to default disk.\n", localKey)
-		// Get public URL
-		url, _ := fs.GetURL(ctx, localKey, filesystems.VisibilityPublic, 0)
-		fmt.Printf("✓ Public local URL: %s\n", url)
+		logger.InfoContext(ctx, "Successfully uploaded file", "key", localKey)
 		fs.Delete(ctx, localKey)
-	}
-
-	// --- Use a specific disk by name ("s3_public") ---
-	fmt.Println("\n--- Using named disk (s3_public) ---")
-	s3Key := "images/avatar.jpg"
-	s3Data := strings.NewReader("This is a public S3 file.")
-	err = fs.Disk("s3_public").Upload(ctx, s3Key, s3Data, int64(s3Data.Len()), filesystems.VisibilityPublic)
-	if err != nil {
-		log.Printf("Failed to upload to s3_public disk: %v (check config)", err)
-	} else {
-		fmt.Printf("✓ Uploaded '%s' to s3_public disk.\n", s3Key)
-		// Get public URL
-		url, _ := fs.Disk("s3_public").GetURL(ctx, s3Key, filesystems.VisibilityPublic, 0)
-		fmt.Printf("✓ Public S3 URL: %s\n", url)
-		fs.Disk("s3_public").Delete(ctx, s3Key)
-	}
-
-	// --- Use another specific disk ("s3_private") ---
-	fmt.Println("\n--- Using named disk (s3_private) ---")
-	privateS3Key := "reports/2023-annual-report.pdf"
-	privateS3Data := strings.NewReader("This is a private S3 document.")
-	err = fs.Disk("s3_private").Upload(ctx, privateS3Key, privateS3Data, int64(privateS3Data.Len()), filesystems.VisibilityPrivate)
-	if err != nil {
-		log.Printf("Failed to upload to s3_private disk: %v (check config)", err)
-	} else {
-		fmt.Printf("✓ Uploaded '%s' to s3_private disk.\n", privateS3Key)
-		// Get signed URL
-		url, _ := fs.Disk("s3_private").GetURL(ctx, privateS3Key, filesystems.VisibilityPrivate, 15*time.Minute)
-		fmt.Printf("✓ Signed S3 URL (valid 15 mins): %s\n", url)
-		fs.Disk("s3_private").Delete(ctx, privateS3Key)
 	}
 }

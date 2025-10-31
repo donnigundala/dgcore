@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -11,6 +12,16 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	creds "github.com/minio/minio-go/v7/pkg/credentials"
 )
+
+// MinIOConfig holds configuration for the MinIO driver.
+type MinIOConfig struct {
+	Endpoint        string
+	AccessKeyID     string
+	SecretAccessKey string
+	UseSSL          bool
+	Bucket          string
+	BaseURL         string
+}
 
 // register converter and driver
 func init() {
@@ -40,67 +51,88 @@ func init() {
 		return m, nil
 	})
 
-	RegisterDriver("minio", func(cfg interface{}) (Storage, error) {
+	RegisterDriver("minio", func(cfg interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
 		c, ok := cfg.(MinIOConfig)
 		if !ok {
 			return nil, fmt.Errorf("invalid config type for minio")
 		}
-		return NewMinioDriver(c)
+		return NewMinioDriver(c, logger, traceIDKey)
 	})
 }
 
 // MinioDriver implements Storage using MinIO.
 type MinioDriver struct {
-	client *minio.Client
-	cfg    MinIOConfig
+	client     *minio.Client
+	cfg        MinIOConfig
+	logger     *slog.Logger
+	traceIDKey any
 }
 
-func NewMinioDriver(cfg MinIOConfig) (*MinioDriver, error) {
+func NewMinioDriver(cfg MinIOConfig, logger *slog.Logger, traceIDKey any) (*MinioDriver, error) {
 	minioClient, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  creds.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		Secure: cfg.UseSSL,
 	})
 	if err != nil {
+		logger.Error("Failed to create MinIO client", "endpoint", cfg.Endpoint, "error", err)
 		return nil, fmt.Errorf("minio: create client: %w", err)
 	}
 
 	// Ensure bucket exists (best-effort)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	logger.Debug("Checking if MinIO bucket exists", "bucket", cfg.Bucket)
 	exists, err := minioClient.BucketExists(ctx, cfg.Bucket)
 	if err != nil {
+		logger.Error("Failed to check if MinIO bucket exists", "bucket", cfg.Bucket, "error", err)
 		return nil, fmt.Errorf("minio: bucket exists check failed: %w", err)
 	}
 	if !exists {
+		logger.Info("MinIO bucket does not exist, creating it", "bucket", cfg.Bucket)
 		if err := minioClient.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{}); err != nil {
-			// non-fatal in some environments: just return error
+			logger.Error("Failed to create MinIO bucket", "bucket", cfg.Bucket, "error", err)
 			return nil, fmt.Errorf("minio: create bucket: %w", err)
 		}
 	}
 
-	return &MinioDriver{client: minioClient, cfg: cfg}, nil
+	return &MinioDriver{client: minioClient, cfg: cfg, logger: logger, traceIDKey: traceIDKey}, nil
+}
+
+func (m *MinioDriver) loggerFrom(ctx context.Context) *slog.Logger {
+	logger := m.logger
+	if m.traceIDKey != nil {
+		if traceID, ok := ctx.Value(m.traceIDKey).(string); ok && traceID != "" {
+			logger = logger.With(slog.String("trace_id", traceID))
+		}
+	}
+	return logger
 }
 
 func (m *MinioDriver) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
+	logger := m.loggerFrom(ctx)
 	opts := minio.PutObjectOptions{}
 	if visibility == VisibilityPublic {
 		opts.UserMetadata = map[string]string{"x-amz-acl": "public-read"}
 	}
 	_, err := m.client.PutObject(ctx, m.cfg.Bucket, key, data, size, opts)
 	if err != nil {
+		logger.Error("Failed to upload to MinIO", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return fmt.Errorf("minio: put object: %w", err)
 	}
+	logger.Debug("Uploaded to MinIO", "key", key, "bucket", m.cfg.Bucket)
 	return nil
 }
 
 func (m *MinioDriver) Download(ctx context.Context, key string) (io.ReadCloser, error) {
+	logger := m.loggerFrom(ctx)
 	obj, err := m.client.GetObject(ctx, m.cfg.Bucket, key, minio.GetObjectOptions{})
 	if err != nil {
-		// Check if the error is a not-found error before trying to parse it.
 		errResponse := minio.ToErrorResponse(err)
 		if errResponse.StatusCode == 404 {
+			logger.Debug("Object not found in MinIO for download", "key", key, "bucket", m.cfg.Bucket)
 			return nil, ErrNotFound
 		}
+		logger.Error("Failed to get object from MinIO", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return nil, fmt.Errorf("minio: get object: %w", err)
 	}
 	// Stat the object to ensure it exists before returning.
@@ -108,34 +140,42 @@ func (m *MinioDriver) Download(ctx context.Context, key string) (io.ReadCloser, 
 	if err != nil {
 		errResponse := minio.ToErrorResponse(err)
 		if errResponse.StatusCode == 404 {
+			logger.Debug("Object not found in MinIO on stat after get", "key", key, "bucket", m.cfg.Bucket)
 			return nil, ErrNotFound
 		}
+		logger.Error("Failed to stat object from MinIO after get", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return nil, fmt.Errorf("minio: stat object: %w", err)
 	}
 	return obj, nil
 }
 
 func (m *MinioDriver) Delete(ctx context.Context, key string) error {
+	logger := m.loggerFrom(ctx)
 	err := m.client.RemoveObject(ctx, m.cfg.Bucket, key, minio.RemoveObjectOptions{})
 	if err != nil {
+		logger.Error("Failed to delete object from MinIO", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return fmt.Errorf("minio: remove object: %w", err)
 	}
+	logger.Debug("Deleted object from MinIO", "key", key, "bucket", m.cfg.Bucket)
 	return nil
 }
 
 func (m *MinioDriver) Exists(ctx context.Context, key string) (bool, error) {
+	logger := m.loggerFrom(ctx)
 	_, err := m.client.StatObject(ctx, m.cfg.Bucket, key, minio.StatObjectOptions{})
 	if err != nil {
 		errResponse := minio.ToErrorResponse(err)
 		if errResponse.StatusCode == 404 {
 			return false, nil
 		}
+		logger.Warn("Failed to check existence in MinIO", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return false, fmt.Errorf("minio: stat object: %w", err)
 	}
 	return true, nil
 }
 
 func (m *MinioDriver) GetURL(ctx context.Context, key string, visibility Visibility, duration time.Duration) (string, error) {
+	logger := m.loggerFrom(ctx)
 	if visibility == VisibilityPublic && m.cfg.BaseURL != "" {
 		return strings.TrimRight(m.cfg.BaseURL, "/") + "/" + strings.TrimLeft(key, "/"), nil
 	}
@@ -144,12 +184,14 @@ func (m *MinioDriver) GetURL(ctx context.Context, key string, visibility Visibil
 	reqParams := make(url.Values)
 	signedUrl, err := m.client.PresignedGetObject(ctx, m.cfg.Bucket, key, duration, reqParams)
 	if err != nil {
+		logger.Error("Failed to generate presigned URL for MinIO", "key", key, "bucket", m.cfg.Bucket, "error", err)
 		return "", fmt.Errorf("minio: presigned url: %w", err)
 	}
 	return signedUrl.String(), nil
 }
 
 func (m *MinioDriver) List(ctx context.Context, prefix string) ([]string, error) {
+	logger := m.loggerFrom(ctx)
 	// Use a channel to stream results and avoid high memory usage.
 	objectCh := m.client.ListObjects(ctx, m.cfg.Bucket, minio.ListObjectsOptions{
 		Prefix:    prefix,
@@ -159,6 +201,7 @@ func (m *MinioDriver) List(ctx context.Context, prefix string) ([]string, error)
 	var results []string
 	for object := range objectCh {
 		if object.Err != nil {
+			logger.Error("Error while listing objects from MinIO", "prefix", prefix, "bucket", m.cfg.Bucket, "error", object.Err)
 			return nil, fmt.Errorf("minio: list objects: %w", object.Err)
 		}
 		results = append(results, object.Key)
