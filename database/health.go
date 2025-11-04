@@ -2,9 +2,7 @@ package database
 
 import (
 	"context"
-	"log/slog"
-
-	"github.com/donnigundala/dgcore/database/contracts"
+	"fmt"
 )
 
 // HealthStatus represents the health of a single database connection.
