@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -16,6 +18,7 @@ type Server struct {
 	logger      *slog.Logger
 	tlsCertFile string
 	tlsKeyFile  string
+	shutdownCh  chan struct{} // Channel to signal shutdown completion
 }
 
 // Option The heart of the pattern.
@@ -35,6 +38,7 @@ func NewServer(handler http.Handler, opts ...Option) *Server {
 			IdleTimeout:    120 * time.Second,
 			MaxHeaderBytes: maxHeaderBytes,
 		},
+		shutdownCh: make(chan struct{}),
 	}
 
 	// Apply all the functional options to override the defaults
@@ -112,17 +116,46 @@ func (s *Server) Server() *http.Server {
 }
 
 // Start http server
-func (s *Server) Start() error {
-	// Check if TLS is configured by looking for the TLSConfig and cert files
-	isTLS := s.server.TLSConfig != nil && s.tlsCertFile != "" && s.tlsKeyFile != ""
+func (s *Server) Start() {
+	go func() {
+		isTLS := s.server.TLSConfig != nil && s.tlsCertFile != "" && s.tlsKeyFile != ""
+		var err error
 
-	if isTLS {
-		s.logger.Info("Starting HTTPS server", "address", s.server.Addr)
-		return s.server.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
+		if isTLS {
+			s.logger.Info("Starting HTTPS server", "address", s.server.Addr)
+			err = s.server.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
+		} else {
+			s.logger.Info("Starting HTTP server", "address", s.server.Addr)
+			err = s.server.ListenAndServe()
+		}
+
+		// If ListenAndServe returns an error (and it's not because the server was closed), log it.
+		if err != nil && err != http.ErrServerClosed {
+			s.logger.Error("HTTP server failed", "error", err)
+		}
+	}()
+}
+
+// WaitForShutdown blocks until an OS interrupt signal is received.
+// It then performs a graceful shutdown of the server.
+func (s *Server) WaitForShutdown(timeout time.Duration) {
+	// Create a channel to listen for OS signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until a signal is received
+	<-quit
+	s.logger.Warn("Shutdown signal received, starting graceful shutdown...")
+
+	// Create a context with a timeout for the shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := s.Shutdown(ctx); err != nil {
+		s.logger.Error("Graceful shutdown failed", "error", err)
+	} else {
+		s.logger.Info("Server gracefully stopped")
 	}
-
-	s.logger.Info("Starting HTTP server", "address", s.server.Addr)
-	return s.server.ListenAndServe()
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.
