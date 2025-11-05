@@ -96,18 +96,22 @@ func WithTLS(certFile, keyFile, tlsVersion string) Option {
 
 // NewServerFromConfig creates a new server from a configuration struct.
 // This acts as a bridge between your Viper-based config and the server component.
-func NewServerFromConfig(cfg *Config, handler http.Handler) *Server {
+func NewServerFromConfig(cfg *Config, handler http.Handler, opts ...Option) *Server {
 	// Create a slice of options from your config struct
-	var opts []Option
-	opts = append(opts, WithAddress(cfg.Host, cfg.Port))
-	opts = append(opts, WithTimeouts(cfg.ReadTimeout, cfg.WriteTimeout, cfg.IdleTimeout))
-
-	if cfg.TLS.Enabled {
-		opts = append(opts, WithTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile, cfg.TLS.TLSVersion))
+	configOpts := []Option{
+		WithAddress(cfg.Host, cfg.Port),
+		WithTimeouts(cfg.ReadTimeout, cfg.WriteTimeout, cfg.IdleTimeout),
 	}
 
+	if cfg.TLS.Enabled {
+		configOpts = append(configOpts, WithTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile, cfg.TLS.TLSVersion))
+	}
+
+	// Append any additional options passed to this function.
+	allOpts := append(configOpts, opts...)
+
 	// Call the core constructor with the generated options
-	return NewServer(handler, opts...)
+	return NewServer(handler, allOpts...)
 }
 
 // Server get http server instance
@@ -116,24 +120,16 @@ func (s *Server) Server() *http.Server {
 }
 
 // Start http server
-func (s *Server) Start() {
-	go func() {
-		isTLS := s.server.TLSConfig != nil && s.tlsCertFile != "" && s.tlsKeyFile != ""
-		var err error
+func (s *Server) Start() error {
+	isTLS := s.server.TLSConfig != nil && s.tlsCertFile != "" && s.tlsKeyFile != ""
 
-		if isTLS {
-			s.logger.Info("Starting HTTPS server", "address", s.server.Addr)
-			err = s.server.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
-		} else {
-			s.logger.Info("Starting HTTP server", "address", s.server.Addr)
-			err = s.server.ListenAndServe()
-		}
+	if isTLS {
+		s.logger.Info("Starting HTTPS server", "address", s.server.Addr)
+		return s.server.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
+	}
 
-		// If ListenAndServe returns an error (and it's not because the server was closed), log it.
-		if err != nil && err != http.ErrServerClosed {
-			s.logger.Error("HTTP server failed", "error", err)
-		}
-	}()
+	s.logger.Info("Starting HTTP server", "address", s.server.Addr)
+	return s.server.ListenAndServe()
 }
 
 // WaitForShutdown blocks until an OS interrupt signal is received.
