@@ -4,60 +4,28 @@ import (
 	"context"
 )
 
-// ProviderType defines the type of database provider.
-type ProviderType string
-
-const (
-	// ProviderSQL represents the SQL database provider.
-	ProviderSQL ProviderType = "sql"
-	// ProviderMongo represents the MongoDB database provider.
-	ProviderMongo ProviderType = "mongo"
-	// ProviderRedis represents the Redis database provider (for future use).
-	ProviderRedis ProviderType = "redis"
-)
-
-// MetricsProvider defines the interface for a metrics provider.
-// This allows for integration with any metrics library (e.g., Prometheus, StatsD).
-type MetricsProvider interface {
-	// Inc increments a counter metric.
-	Inc(name string, labels ...string)
-	// SetGauge sets the value of a gauge metric.
-	SetGauge(name string, value float64, labels ...string)
-	// Observe records a value in a histogram or summary metric.
-	Observe(name string, value float64, labels ...string)
-}
-
-// nopMetricsProvider is a no-op implementation of MetricsProvider.
-type nopMetricsProvider struct{}
-
-func (n *nopMetricsProvider) Inc(name string, labels ...string)                     {}
-func (n *nopMetricsProvider) SetGauge(name string, value float64, labels ...string) {}
-func (n *nopMetricsProvider) Observe(name string, value float64, labels ...string)  {}
-
-// NewNopMetricsProvider returns a metrics provider that does nothing.
-func NewNopMetricsProvider() MetricsProvider {
-	return &nopMetricsProvider{}
-}
-
-// Provider is the interface that all database providers must implement.
+// Provider defines the common interface for all database connections.
+// This allows for treating different database systems (SQL, MongoDB, etc.)
+// in a uniform manner.
 type Provider interface {
+	// Ping checks if the database connection is alive.
 	Ping(ctx context.Context) error
+
+	// Close gracefully terminates the database connection.
 	Close() error
-	// GetDB is deprecated. Use GetWriter() instead.
-	GetDB() any
-	GetWriter() any
-	GetReader() any
 }
 
-// Config holds the configuration for all database providers.
-type Config struct {
-	Driver     ProviderType    `json:"driver" mapstructure:"driver"`
-	SQL        *SQLConfig      `json:"sql" mapstructure:"sql"`
-	Mongo      *MongoConfig    `json:"mongo" mapstructure:"mongo"`
-	Policy     *HealthPolicy   `json:"policy" mapstructure:"policy"`
-	Metrics    MetricsProvider `json:"-" mapstructure:"-"` // Metrics provider is not configurable via file
-	TraceIDKey string          `json:"trace_id_key" mapstructure:"trace_id_key"`
+// SQLProvider extends the base Provider with methods specific to SQL databases,
+// typically those provided by GORM.
+type SQLProvider interface {
+	Provider
+	// Gorm returns the underlying GORM DB instance for complex queries.
+	Gorm() interface{} // Returning interface{} to avoid direct GORM dependency here.
 }
 
-// ManagerConfig is used to inject the full database configuration map.
-type ManagerConfig map[string]*Config
+// MongoProvider extends the base Provider with methods specific to MongoDB.
+type MongoProvider interface {
+	Provider
+	// Client returns the underlying MongoDB client instance.
+	Client() interface{} // Returning interface{} to avoid direct Mongo driver dependency here.
+}

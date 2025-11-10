@@ -11,115 +11,113 @@ import (
 
 // DatabaseManager handles the lifecycle of all database connections.
 type DatabaseManager struct {
-	mu          sync.RWMutex
-	connections map[string]Provider
-	configs     map[string]*Config
-	baseLogger  *slog.Logger
+	mu                sync.RWMutex
+	connections       map[string]Provider
+	defaultConnection string
+	logger            *slog.Logger
 }
 
-var (
-	globalManager *DatabaseManager
-	once          sync.Once
-)
+// ManagerOption configures a DatabaseManager.
+type ManagerOption func(*DatabaseManager)
 
-// Manager returns the global singleton instance of the DatabaseManager.
-func Manager() *DatabaseManager {
-	once.Do(func() {
-		globalManager = NewManager()
-	})
-	return globalManager
+// WithLogger provides a slog logger for the database manager.
+func WithLogger(logger *slog.Logger) ManagerOption {
+	return func(m *DatabaseManager) {
+		if logger != nil {
+			m.logger = logger.With("component", "database_manager")
+		}
+	}
 }
 
-// NewManager creates a new, non-singleton instance of the DatabaseManager.
-// This is primarily intended for use in isolated tests.
-func NewManager() *DatabaseManager {
-	return &DatabaseManager{
+// NewManager creates a new instance of the DatabaseManager from a configuration struct.
+func NewManager(cfg ManagerConfig, opts ...ManagerOption) (*DatabaseManager, error) {
+	m := &DatabaseManager{
 		connections: make(map[string]Provider),
-		configs:     make(map[string]*Config),
-		// Initialize with a default logger, which can be overridden by SetLogger
-		baseLogger: slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager"),
+		logger:      slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager"),
 	}
-}
 
-// SetLogger allows an external slog.Logger to be injected into the DatabaseManager.
-// This logger will be passed down to individual providers.
-func (m *DatabaseManager) SetLogger(logger *slog.Logger) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if logger != nil {
-		m.baseLogger = logger.With("component", "database_manager")
-	} else {
-		m.baseLogger = slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager")
+	for _, opt := range opts {
+		opt(m)
 	}
-	m.baseLogger.Debug("DatabaseManager logger set.")
-}
 
-// Register adds a new database configuration to the manager.
-func (m *DatabaseManager) Register(name string, cfg *Config) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, exists := m.configs[name]; exists {
-		m.baseLogger.Warn("Configuration for database is being overwritten.", "db_name", name)
+	if len(cfg.Connections) == 0 {
+		m.logger.Warn("No database connections configured.")
+		return m, nil
 	}
-	m.configs[name] = cfg
-	m.baseLogger.Info("Registered configuration for database.", "db_name", name, "driver", cfg.Driver)
-}
 
-// ConnectAll establishes connections for all registered configurations.
-func (m *DatabaseManager) ConnectAll(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.logger.Info("Initializing database manager...", "connection_count", len(cfg.Connections))
 
-	m.baseLogger.Info("Starting to connect all registered databases...")
-	for name, cfg := range m.configs {
-		m.baseLogger.Info("Connecting to database.", "db_name", name, "driver", cfg.Driver)
-		// Pass the manager's base logger to the New function
-		provider, err := New(ctx, cfg, m.baseLogger)
+	for name, connCfg := range cfg.Connections {
+		provider, err := New(context.Background(), name, connCfg, m.logger)
 		if err != nil {
-			m.baseLogger.Error("Failed to connect to database.", "db_name", name, "error", err)
-			return fmt.Errorf("failed to connect to '%s': %w", name, err)
+			m.logger.Error("Failed to connect to database", "connection", name, "error", err)
+			return nil, fmt.Errorf("failed to connect to '%s': %w", name, err)
 		}
 		m.connections[name] = provider
-		m.baseLogger.Info("Successfully connected to database.", "db_name", name)
+		m.logger.Info("Successfully connected to database.", "connection", name, "driver", connCfg.Driver)
 	}
-	m.baseLogger.Info("All connections established.")
-	return nil
+
+	m.defaultConnection = cfg.DefaultConnection
+	if _, ok := m.connections[m.defaultConnection]; m.defaultConnection != "" && !ok {
+		return nil, fmt.Errorf("default connection '%s' not found in configured connections", m.defaultConnection)
+	}
+
+	return m, nil
 }
 
-// Get returns the database provider for the given name.
-func (m *DatabaseManager) Get(name string) Provider {
+// Connection returns a specific database provider by name.
+// If the name is empty, it returns the default connection.
+func (m *DatabaseManager) Connection(name ...string) (Provider, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	provider, ok := m.connections[name]
+	var connName string
+	if len(name) > 0 && name[0] != "" {
+		connName = name[0]
+	} else {
+		connName = m.defaultConnection
+	}
+
+	if connName == "" {
+		return nil, errors.New("no database connection name specified and no default connection is set")
+	}
+
+	provider, ok := m.connections[connName]
 	if !ok {
-		m.baseLogger.Warn("Attempted to get a non-existent provider.", "db_name", name)
-		return nil
+		return nil, fmt.Errorf("database connection '%s' not configured", connName)
+	}
+	return provider, nil
+}
+
+// MustConnection is like Connection but panics if the provider is not found.
+func (m *DatabaseManager) MustConnection(name ...string) Provider {
+	provider, err := m.Connection(name...)
+	if err != nil {
+		panic(err)
 	}
 	return provider
 }
 
-// Close gracefully closes all database connections.
+// Close gracefully closes all managed database connections.
 func (m *DatabaseManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.baseLogger.Info("Closing all database connections...")
+	m.logger.Info("Closing all database connections...")
 	var allErrors []error
 	for name, conn := range m.connections {
 		if err := conn.Close(); err != nil {
-			m.baseLogger.Error("Failed to close connection for database.", "db_name", name, "error", err)
+			m.logger.Error("Failed to close connection for database.", "connection", name, "error", err)
 			allErrors = append(allErrors, fmt.Errorf("failed closing '%s': %w", name, err))
 		}
 		delete(m.connections, name)
 	}
 
 	if len(allErrors) > 0 {
-		m.baseLogger.Error("Finished closing connections with errors.", "error_count", len(allErrors))
+		m.logger.Error("Finished closing connections with errors.", "error_count", len(allErrors))
 		return errors.Join(allErrors...)
 	}
 
-	m.baseLogger.Info("All connections closed successfully.")
+	m.logger.Info("All connections closed successfully.")
 	return nil
 }

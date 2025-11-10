@@ -1,168 +1,120 @@
-package database_test
+package database
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
-	"sync"
 	"testing"
 
-	"github.com/donnigundala/dgcore/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-// TestContextKey is a custom type for context keys to avoid collisions in tests.
-type TestContextKey string
-
-const (
-	TestTraceIDContextKey TestContextKey = "test-trace-id"
-)
-
-// MockMetricsProvider is a simple mock for testing metrics.
-type MockMetricsProvider struct {
-	mu          sync.Mutex
-	IncCalls    map[string]int
-	GaugeValues map[string]float64
-}
-
-func NewMockMetricsProvider() *MockMetricsProvider {
-	return &MockMetricsProvider{
-		IncCalls:    make(map[string]int),
-		GaugeValues: make(map[string]float64),
-	}
-}
-
-func (m *MockMetricsProvider) Inc(name string, labels ...string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := name + "_" + fmt.Sprintf("%v", labels)
-	m.IncCalls[key]++
-}
-
-func (m *MockMetricsProvider) SetGauge(name string, value float64, labels ...string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := name + "_" + fmt.Sprintf("%v", labels)
-	m.GaugeValues[key] = value
-}
-
-func (m *MockMetricsProvider) Observe(name string, value float64, labels ...string) {
-	// Not implemented for this mock
-}
-
-func TestManagerSingleton(t *testing.T) {
-	mgr1 := database.Manager()
-	mgr2 := database.Manager()
-	assert.Same(t, mgr1, mgr2, "Manager() should return a singleton instance")
-}
-
-func TestManagerRegisterAndGet(t *testing.T) {
-	// Use the non-singleton manager for isolated testing
-	mgr := database.NewManager()
-
-	cfg := &database.Config{
-		Driver: database.ProviderSQL,
-		SQL: &database.SQLConfig{
-			DriverName: "sqlite",
-			Primary:    &database.SQLConnectionDetails{DBName: database.Secret{Value: ":memory:"}},
-		},
-	}
-
-	mgr.Register("test_db", cfg)
-
-	// Test public behavior: Get should return nil before ConnectAll
-	provider := mgr.Get("test_db")
-	assert.Nil(t, provider, "Provider should be nil before ConnectAll")
-
-	// Test getting a non-existent provider
-	nonExistentProvider := mgr.Get("non_existent_db")
-	assert.Nil(t, nonExistentProvider, "Getting a non-existent provider should return nil")
-}
-
-func TestConnectAllAndSQLite(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Use a discard logger for tests to avoid polluting stdout
-	discardLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	// Create a new manager instance for a clean test state
-	mgr := database.NewManager()
-	mgr.SetLogger(discardLogger)
-
-	metrics := NewMockMetricsProvider()
-
-	cfg := &database.Config{
-		Driver: database.ProviderSQL,
-		SQL: &database.SQLConfig{
-			DriverName: "sqlite",
-			Primary:    &database.SQLConnectionDetails{DBName: database.Secret{Value: "file::memory:?cache=shared"}},
-			LogLevel:   database.LogLevelInfo,
-		},
-		Metrics:    metrics,
-		TraceIDKey: string(TestTraceIDContextKey),
-	}
-
-	mgr.Register("sqlite_test_db", cfg)
-
-	connCtx := context.WithValue(ctx, TestTraceIDContextKey, "test-conn-trace")
-	err := mgr.ConnectAll(connCtx)
-	require.NoError(t, err, "ConnectAll should not return an error")
-
-	provider := mgr.Get("sqlite_test_db")
-	require.NotNil(t, provider, "Provider should not be nil after ConnectAll")
-
-	// Test Ping
-	err = provider.Ping(connCtx)
-	assert.NoError(t, err, "Ping should succeed")
-
-	// Test GetWriter and basic GORM operation
-	writerDB := provider.GetWriter().(*gorm.DB)
-	require.NotNil(t, writerDB, "Writer DB should not be nil")
-
-	// AutoMigrate a dummy table
-	err = writerDB.WithContext(connCtx).AutoMigrate(&TestModel{})
-	require.NoError(t, err, "AutoMigrate should succeed")
-
-	// Create a record
-	newRecord := TestModel{Name: "Test Record"}
-	err = writerDB.WithContext(connCtx).Create(&newRecord).Error
-	require.NoError(t, err, "Create should succeed")
-	assert.Greater(t, newRecord.ID, uint(0), "ID should be assigned")
-
-	// Read the record
-	readRecord := TestModel{}
-	readerDB := provider.GetReader().(*gorm.DB)
-	require.NotNil(t, readerDB, "Reader DB should not be nil")
-
-	err = readerDB.WithContext(connCtx).First(&readRecord, newRecord.ID).Error
-	require.NoError(t, err, "Read should succeed")
-	assert.Equal(t, newRecord.Name, readRecord.Name, "Read record name should match")
-
-	// Test metrics
-	assert.Equal(t, float64(1), metrics.GaugeValues["db_primary_healthy_[primary]"], "Primary healthy gauge should be 1")
-
-	// Test Close
-	err = mgr.Close()
-	assert.NoError(t, err, "Close should succeed")
-}
-
+// TestModel is a simple GORM model for testing purposes.
 type TestModel struct {
-	ID   uint `gorm:"primarykey"`
+	gorm.Model
 	Name string
 }
 
-// TODO: Add more comprehensive tests for:
-// - PostgreSQL (requires Docker or real instance)
-// - MySQL (requires Docker or real instance)
-// - MongoDB (requires Docker or real instance/mocking library)
-// - Failover scenarios
-// - Read/Write splitting with replicas
-// - Connection pool settings
-// - TLS configuration
-// - Error handling
-// - Metrics reporting for all events
-// - Slog context awareness
+// TestNewManager_WithSQLite creates a manager with a single SQLite in-memory database,
+// connects to it, and performs basic CRUD operations.
+func TestNewManager_WithSQLite(t *testing.T) {
+	// 1. Define the configuration manually in code (the power of DI for testing).
+	dbManagerConfig := ManagerConfig{
+		DefaultConnection: "my_sqlite",
+		Connections: map[string]Connection{
+			"my_sqlite": {
+				Driver: "sql",
+				SQL: &SQLConfig{
+					DriverName: "sqlite",
+					Primary: NodeConfig{
+						// Use in-memory SQLite for fast, isolated tests.
+						DBName: "file::memory:?cache=shared",
+					},
+					LogLevel: "silent", // Keep test logs clean.
+				},
+			},
+		},
+	}
+
+	// Use a discard logger for tests unless debugging.
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// 2. Create the DatabaseManager by injecting the configuration.
+	dbManager, err := NewManager(dbManagerConfig, WithLogger(logger))
+	require.NoError(t, err, "NewManager should not fail with valid config")
+	require.NotNil(t, dbManager, "NewManager should return a non-nil manager")
+	defer dbManager.Close()
+
+	// 3. Get the connection.
+	// We ask for the default connection.
+	provider, err := dbManager.Connection()
+	require.NoError(t, err, "Getting the default connection should not fail")
+	require.NotNil(t, provider, "The default provider should not be nil")
+
+	// 4. Check the provider type and get the underlying GORM DB.
+	sqlProvider, ok := provider.(SQLProvider)
+	require.True(t, ok, "Provider should be a SQLProvider")
+	gormDB := sqlProvider.Gorm().(*gorm.DB)
+	require.NotNil(t, gormDB, "GORM DB instance should not be nil")
+
+	// 5. Perform database operations.
+	ctx := context.Background()
+
+	// AutoMigrate a table.
+	err = gormDB.WithContext(ctx).AutoMigrate(&TestModel{})
+	require.NoError(t, err, "AutoMigrate should succeed")
+
+	// Create a record.
+	newUser := TestModel{Name: "Test User"}
+	err = gormDB.WithContext(ctx).Create(&newUser).Error
+	require.NoError(t, err, "Create operation should succeed")
+	assert.Greater(t, newUser.ID, uint(0), "Record should have a non-zero ID after creation")
+
+	// Read the record back.
+	var fetchedUser TestModel
+	err = gormDB.WithContext(ctx).First(&fetchedUser, newUser.ID).Error
+	require.NoError(t, err, "Read operation should succeed")
+	assert.Equal(t, "Test User", fetchedUser.Name, "Fetched record should have the correct name")
+
+	// 6. Test closing the manager.
+	err = dbManager.Close()
+	assert.NoError(t, err, "Closing the manager should not produce an error")
+}
+
+// TestNewManager_EmptyConfig tests that the manager can be created with no connections.
+func TestNewManager_EmptyConfig(t *testing.T) {
+	emptyConfig := ManagerConfig{}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	dbManager, err := NewManager(emptyConfig, WithLogger(logger))
+	require.NoError(t, err, "NewManager should not fail with empty config")
+	require.NotNil(t, dbManager, "NewManager should return a non-nil manager")
+
+	// Getting a connection should fail.
+	_, err = dbManager.Connection("any")
+	assert.Error(t, err, "Getting a connection from an empty manager should fail")
+}
+
+// TestNewManager_MissingDefault tests that getting the default connection fails
+// when the specified default does not exist.
+func TestNewManager_MissingDefault(t *testing.T) {
+	configWithBadDefault := ManagerConfig{
+		DefaultConnection: "non_existent_default",
+		Connections: map[string]Connection{
+			"my_sqlite": {
+				Driver: "sql",
+				SQL: &SQLConfig{
+					DriverName: "sqlite",
+					Primary:    NodeConfig{DBName: ":memory:"},
+				},
+			},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// Manager creation itself should fail if the default is not found.
+	_, err := NewManager(configWithBadDefault, WithLogger(logger))
+	assert.Error(t, err, "NewManager should fail if the default connection is not configured")
+}

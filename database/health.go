@@ -2,67 +2,110 @@ package database
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+	"sync"
+	"time"
 )
 
-// HealthStatus represents the health of a single database connection.
-type HealthStatus struct {
-	Name    string `json:"name"`
-	Driver  string `json:"driver"`
-	Healthy bool   `json:"healthy"`
-	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
+// HealthChecker periodically pings database connections to ensure they are live.
+type HealthChecker struct {
+	manager    *DatabaseManager
+	interval   time.Duration
+	ticker     *time.Ticker
+	quit       chan struct{}
+	logger     *slog.Logger
+	checkNow   chan bool
+	endpoints  []string
 }
 
-// CheckHealth checks the health of all registered database connections.
-func (m *DatabaseManager) CheckHealth(ctx context.Context) []HealthStatus {
-	m.mu.RLock()
-	defer m.mu.Unlock()
-
-	results := make([]HealthStatus, 0, len(m.connections))
-	for name, conn := range m.connections {
-		status := HealthStatus{
-			Name:   name,
-			Driver: string(m.configs[name].Driver),
-		}
-
-		if err := conn.Ping(ctx); err != nil {
-			status.Healthy = false
-			status.Message = "Connection is down."
-			status.Error = err.Error()
-		} else {
-			status.Healthy = true
-			status.Message = "Connection is healthy."
-		}
-		results = append(results, status)
+// NewHealthChecker creates a new checker for the given DatabaseManager.
+func NewHealthChecker(m *DatabaseManager, interval time.Duration, endpoints []string, logger *slog.Logger) *HealthChecker {
+	return &HealthChecker{
+		manager:    m,
+		interval:   interval,
+		quit:       make(chan struct{}),
+		logger:     logger.With("component", "db_health_checker"),
+		checkNow:   make(chan bool, 1),
+		endpoints:  endpoints,
 	}
-	return results
 }
 
-// PrintHealth logs the health status of all connections to the console.
-func (m *DatabaseManager) PrintHealth(ctx context.Context) {
-	statuses := m.CheckHealth(ctx)
-	m.baseLogger.Info("Health Check Report:")
-
-	if len(statuses) == 0 {
-		m.baseLogger.Info("No database connections to check.")
+// Start begins the periodic health checks.
+func (hc *HealthChecker) Start() {
+	if hc.interval <= 0 {
+		hc.logger.Warn("Health checker interval is zero or negative, checker will not start.")
 		return
 	}
-
-	for _, s := range statuses {
-		var statusSymbol string
-		var logFunc func(msg string, args ...any)
-		if s.Healthy {
-			statusSymbol = "✔"
-			logFunc = m.baseLogger.Info
-		} else {
-			statusSymbol = "✖"
-			logFunc = m.baseLogger.Error
+	hc.ticker = time.NewTicker(hc.interval)
+	hc.logger.Info("Starting database health checker...", "interval", hc.interval)
+	go func() {
+		for {
+			select {
+			case <-hc.ticker.C:
+				hc.checkAll()
+			case <-hc.checkNow:
+				hc.checkAll()
+			case <-hc.quit:
+				hc.ticker.Stop()
+				return
+			}
 		}
+	}()
+}
 
-		logFunc(fmt.Sprintf("%s %s (%s): %s", statusSymbol, s.Name, s.Driver, s.Message))
-		if !s.Healthy && s.Error != "" {
-			logFunc(fmt.Sprintf("  Error: %s", s.Error))
+// Stop terminates the health checker.
+func (hc *HealthChecker) Stop() {
+	hc.logger.Info("Stopping database health checker...")
+	close(hc.quit)
+}
+
+// CheckAllNow triggers an immediate health check for all connections.
+func (hc *HealthChecker) CheckAllNow() {
+	select {
+	case hc.checkNow <- true:
+	default:
+		hc.logger.Debug("Immediate health check already in progress, skipping.")
+	}
+}
+
+func (hc *HealthChecker) checkAll() {
+	hc.logger.Debug("Performing health check on database connections...")
+
+	// Safely get a copy of the connections map from the manager
+	hc.manager.mu.RLock()
+	connections := make(map[string]Provider, len(hc.manager.connections))
+	for name, conn := range hc.manager.connections {
+		connections[name] = conn
+	}
+	hc.manager.mu.RUnlock()
+
+	endpointsToCheck := hc.endpoints
+	if len(endpointsToCheck) == 0 {
+		for name := range connections {
+			endpointsToCheck = append(endpointsToCheck, name)
 		}
 	}
+
+	var wg sync.WaitGroup
+	for _, name := range endpointsToCheck {
+		conn, ok := connections[name]
+		if !ok {
+			hc.logger.Warn("Cannot perform health check on unknown connection", "connection", name)
+			continue
+		}
+
+		wg.Add(1)
+		go func(n string, c Provider) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := c.Ping(ctx); err != nil {
+				hc.logger.Error("Database health check failed", "connection", n, "error", err)
+			} else {
+				hc.logger.Debug("Database health check successful", "connection", n)
+			}
+		}(name, conn)
+	}
+	wg.Wait()
 }
