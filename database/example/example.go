@@ -10,7 +10,6 @@ import (
 
 	"github.com/donnigundala/dgcore/config" // Assuming a framework config package
 	"github.com/donnigundala/dgcore/database"
-	"github.com/donnigundala/dgcore/database/contracts"
 	"gorm.io/gorm"
 )
 
@@ -40,7 +39,7 @@ func main() {
 
 	// --- 2. Inject Configuration ---
 	// This step is typically handled by your application's startup logic.
-	var dbConfigs map[string]*contracts.Config
+	var dbConfigs map[string]*database.Config
 	if err := config.Inject("databases", &dbConfigs); err != nil {
 		log.Fatalf("Failed to inject database configurations: %v", err)
 	}

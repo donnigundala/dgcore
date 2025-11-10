@@ -7,15 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"sync"
-
-	"github.com/donnigundala/dgcore/database/contracts"
 )
 
 // DatabaseManager handles the lifecycle of all database connections.
 type DatabaseManager struct {
 	mu          sync.RWMutex
-	connections map[string]contracts.Provider
-	configs     map[string]*contracts.Config
+	connections map[string]Provider
+	configs     map[string]*Config
 	baseLogger  *slog.Logger
 }
 
@@ -36,10 +34,10 @@ func Manager() *DatabaseManager {
 // This is primarily intended for use in isolated tests.
 func NewManager() *DatabaseManager {
 	return &DatabaseManager{
-		connections: make(map[string]contracts.Provider),
-		configs:     make(map[string]*contracts.Config),
+		connections: make(map[string]Provider),
+		configs:     make(map[string]*Config),
 		// Initialize with a default logger, which can be overridden by SetLogger
-		baseLogger:  slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager"),
+		baseLogger: slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager"),
 	}
 }
 
@@ -57,7 +55,7 @@ func (m *DatabaseManager) SetLogger(logger *slog.Logger) {
 }
 
 // Register adds a new database configuration to the manager.
-func (m *DatabaseManager) Register(name string, cfg *contracts.Config) {
+func (m *DatabaseManager) Register(name string, cfg *Config) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -90,7 +88,7 @@ func (m *DatabaseManager) ConnectAll(ctx context.Context) error {
 }
 
 // Get returns the database provider for the given name.
-func (m *DatabaseManager) Get(name string) contracts.Provider {
+func (m *DatabaseManager) Get(name string) Provider {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

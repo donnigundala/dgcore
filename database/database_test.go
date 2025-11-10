@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/donnigundala/dgcore/database"
-	"github.com/donnigundala/dgcore/database/config"
-	"github.com/donnigundala/dgcore/database/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -65,11 +63,11 @@ func TestManagerRegisterAndGet(t *testing.T) {
 	// Use the non-singleton manager for isolated testing
 	mgr := database.NewManager()
 
-	cfg := &contracts.Config{
-		Driver: contracts.ProviderSQL,
-		SQL: &config.SQLConfig{
+	cfg := &database.Config{
+		Driver: database.ProviderSQL,
+		SQL: &database.SQLConfig{
 			DriverName: "sqlite",
-			Primary:    &config.SQLConnectionDetails{DBName: config.Secret{Value: ":memory:"}},
+			Primary:    &database.SQLConnectionDetails{DBName: database.Secret{Value: ":memory:"}},
 		},
 	}
 
@@ -97,12 +95,12 @@ func TestConnectAllAndSQLite(t *testing.T) {
 
 	metrics := NewMockMetricsProvider()
 
-	cfg := &contracts.Config{
-		Driver: contracts.ProviderSQL,
-		SQL: &config.SQLConfig{
+	cfg := &database.Config{
+		Driver: database.ProviderSQL,
+		SQL: &database.SQLConfig{
 			DriverName: "sqlite",
-			Primary:    &config.SQLConnectionDetails{DBName: config.Secret{Value: "file::memory:?cache=shared"}},
-			LogLevel:   config.LogLevelInfo,
+			Primary:    &database.SQLConnectionDetails{DBName: database.Secret{Value: "file::memory:?cache=shared"}},
+			LogLevel:   database.LogLevelInfo,
 		},
 		Metrics:    metrics,
 		TraceIDKey: string(TestTraceIDContextKey),

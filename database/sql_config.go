@@ -1,4 +1,4 @@
-package config
+package database
 
 import "time"
 
@@ -18,9 +18,9 @@ const (
 // The actual application of these settings will depend on the specific GORM driver.
 type SQLTLSConfig struct {
 	Enabled  bool   `json:"enabled" mapstructure:"enabled"`
-	CA       Secret `json:"ca" mapstructure:"ca"`     // CA certificate content
-	Cert     Secret `json:"cert" mapstructure:"cert"`   // Client certificate content
-	Key      Secret `json:"key" mapstructure:"key"`    // Client key content
+	CA       Secret `json:"ca" mapstructure:"ca"`             // CA certificate content
+	Cert     Secret `json:"cert" mapstructure:"cert"`         // Client certificate content
+	Key      Secret `json:"key" mapstructure:"key"`           // Client key content
 	Insecure bool   `json:"insecure" mapstructure:"insecure"` // Skip TLS verification
 }
 
@@ -39,15 +39,15 @@ type SQLConnectionDetails struct {
 	User     Secret            `json:"user" mapstructure:"user"`
 	Password Secret            `json:"password" mapstructure:"password"`
 	DBName   Secret            `json:"db_name" mapstructure:"db_name"`
-	Params   map[string]Secret `json:"params" mapstructure:"params"` // Additional driver-specific parameters
-	RawDSN   Secret            `json:"raw_dsn" mapstructure:"raw_dsn"`   // Fallback for direct DSN string
+	Params   map[string]Secret `json:"params" mapstructure:"params"`   // Additional driver-specific parameters
+	RawDSN   Secret            `json:"raw_dsn" mapstructure:"raw_dsn"` // Fallback for direct DSN string
 }
 
 type SQLConfig struct {
-	DriverName string                `json:"driver_name" mapstructure:"driver_name"` // e.g., "postgres", "mysql", "sqlite"
-	Primary    *SQLConnectionDetails `json:"primary" mapstructure:"primary"`
+	DriverName string                  `json:"driver_name" mapstructure:"driver_name"` // e.g., "postgres", "mysql", "sqlite"
+	Primary    *SQLConnectionDetails   `json:"primary" mapstructure:"primary"`
 	Replicas   []*SQLConnectionDetails `json:"replicas" mapstructure:"replicas"`
-	Pool       *SQLPoolConfig        `json:"pool" mapstructure:"pool"`
-	TLS        *SQLTLSConfig         `json:"tls" mapstructure:"tls"`
-	LogLevel   LogLevel              `json:"log_level" mapstructure:"log_level"`
+	Pool       *SQLPoolConfig          `json:"pool" mapstructure:"pool"`
+	TLS        *SQLTLSConfig           `json:"tls" mapstructure:"tls"`
+	LogLevel   LogLevel                `json:"log_level" mapstructure:"log_level"`
 }

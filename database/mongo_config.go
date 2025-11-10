@@ -1,4 +1,4 @@
-package config
+package database
 
 import "time"
 
@@ -18,9 +18,9 @@ type MongoPoolConfig struct {
 }
 
 type MongoConfig struct {
-	PrimaryURI Secret   `json:"primary_uri" mapstructure:"primary_uri"`
-	Replicas   []Secret `json:"replicas" mapstructure:"replicas"`
-	Database   string   `json:"database" mapstructure:"database"`
+	PrimaryURI Secret           `json:"primary_uri" mapstructure:"primary_uri"`
+	Replicas   []Secret         `json:"replicas" mapstructure:"replicas"`
+	Database   string           `json:"database" mapstructure:"database"`
 	Pool       *MongoPoolConfig `json:"pool" mapstructure:"pool"`
 	TLS        *MongoTLSConfig  `json:"tls" mapstructure:"tls"`
 	LogLevel   LogLevel         `json:"log_level" mapstructure:"log_level"`

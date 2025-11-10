@@ -1,4 +1,4 @@
-package sql
+package database
 
 import (
 	"context"
@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/donnigundala/dgcore/database/config"
-	"github.com/donnigundala/dgcore/database/contracts"
 	"github.com/donnigundala/dgcore/database/logger"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -23,9 +21,9 @@ import (
 )
 
 type SQLProvider struct {
-	cfg        *config.SQLConfig
-	policy     *config.HealthPolicy
-	metrics    contracts.MetricsProvider
+	cfg        *SQLConfig
+	policy     *HealthPolicy
+	metrics    MetricsProvider
 	baseLogger *slog.Logger // Base logger for the provider
 	traceIDKey string       // Key to extract trace ID from context
 	primary    *gorm.DB
@@ -38,12 +36,12 @@ type SQLProvider struct {
 	reconnectBackoff time.Duration
 }
 
-func NewSQLProvider(ctx context.Context, cfg *config.SQLConfig, policy *config.HealthPolicy, metrics contracts.MetricsProvider, baseLogger *slog.Logger, traceIDKey string) (contracts.Provider, error) {
+func NewSQLProvider(ctx context.Context, cfg *SQLConfig, policy *HealthPolicy, metrics MetricsProvider, baseLogger *slog.Logger, traceIDKey string) (Provider, error) {
 	if cfg == nil {
 		return nil, errors.New("SQL config cannot be nil")
 	}
 	if policy == nil {
-		policy = config.DefaultPolicy()
+		policy = DefaultPolicy()
 	}
 	if baseLogger == nil {
 		baseLogger = slog.Default()
@@ -118,7 +116,7 @@ func (p *SQLProvider) connectAll(ctx context.Context) error {
 	return nil
 }
 
-func (p *SQLProvider) connect(ctx context.Context, name string, details *config.SQLConnectionDetails) (*gorm.DB, error) {
+func (p *SQLProvider) connect(ctx context.Context, name string, details *SQLConnectionDetails) (*gorm.DB, error) {
 	var dsn string
 	var dialector gorm.Dialector
 	var err error
@@ -175,7 +173,7 @@ func (p *SQLProvider) connect(ctx context.Context, name string, details *config.
 	return gormDB, nil
 }
 
-func (p *SQLProvider) buildDSN(details *config.SQLConnectionDetails) (string, error) {
+func (p *SQLProvider) buildDSN(details *SQLConnectionDetails) (string, error) {
 	sb := strings.Builder{}
 
 	switch p.cfg.DriverName {
@@ -280,13 +278,13 @@ func (p *SQLProvider) buildDSN(details *config.SQLConnectionDetails) (string, er
 
 func (p *SQLProvider) gormLogLevel() gormlogger.LogLevel {
 	switch p.cfg.LogLevel {
-	case config.LogLevelSilent:
+	case LogLevelSilent:
 		return gormlogger.Silent
-	case config.LogLevelError:
+	case LogLevelError:
 		return gormlogger.Error
-	case config.LogLevelWarn:
+	case LogLevelWarn:
 		return gormlogger.Warn
-	case config.LogLevelInfo:
+	case LogLevelInfo:
 		return gormlogger.Info
 	default:
 		return gormlogger.Warn // Default to Warn if not specified

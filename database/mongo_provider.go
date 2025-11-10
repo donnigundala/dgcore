@@ -1,4 +1,4 @@
-package mongo
+package database
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/donnigundala/dgcore/database/config"
-	"github.com/donnigundala/dgcore/database/contracts"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -41,15 +39,15 @@ func (m *poolMetricsMonitor) GetOpenConnections() int64 {
 }
 
 type MongoProvider struct {
-	cfg      *config.MongoConfig
-	policy   *config.HealthPolicy
-	metrics  contracts.MetricsProvider
+	cfg        *MongoConfig
+	policy     *HealthPolicy
+	metrics    MetricsProvider
 	baseLogger *slog.Logger // Base logger for the provider
 	traceIDKey string       // Key to extract trace ID from context
-	primary  *mongo.Client
-	replicas []*mongo.Client
-	monitors map[string]*poolMetricsMonitor
-	mu       sync.RWMutex
+	primary    *mongo.Client
+	replicas   []*mongo.Client
+	monitors   map[string]*poolMetricsMonitor
+	mu         sync.RWMutex
 
 	isPrimaryHealthy bool
 	lastReplicaIndex int
@@ -57,12 +55,12 @@ type MongoProvider struct {
 	reconnectBackoff time.Duration
 }
 
-func NewMongoProvider(ctx context.Context, cfg *config.MongoConfig, policy *config.HealthPolicy, metrics contracts.MetricsProvider, baseLogger *slog.Logger, traceIDKey string) (contracts.Provider, error) {
+func NewMongoProvider(ctx context.Context, cfg *MongoConfig, policy *HealthPolicy, metrics MetricsProvider, baseLogger *slog.Logger, traceIDKey string) (Provider, error) {
 	if cfg == nil {
 		return nil, errors.New("mongo config cannot be nil")
 	}
 	if policy == nil {
-		policy = config.DefaultPolicy()
+		policy = DefaultPolicy()
 	}
 	if baseLogger == nil {
 		baseLogger = slog.Default()
@@ -134,7 +132,7 @@ func (p *MongoProvider) connectAll(ctx context.Context) error {
 	return nil
 }
 
-func (p *MongoProvider) connect(ctx context.Context, name string, uri config.Secret, rp *readpref.ReadPref) (*mongo.Client, error) {
+func (p *MongoProvider) connect(ctx context.Context, name string, uri Secret, rp *readpref.ReadPref) (*mongo.Client, error) {
 	resolvedURI := uri.Get()
 	if resolvedURI == "" {
 		return nil, errors.New("URI for " + name + " is empty")

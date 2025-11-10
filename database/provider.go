@@ -1,9 +1,7 @@
-package contracts
+package database
 
 import (
 	"context"
-
-	"github.com/donnigundala/dgcore/database/config"
 )
 
 // ProviderType defines the type of database provider.
@@ -53,12 +51,12 @@ type Provider interface {
 
 // Config holds the configuration for all database providers.
 type Config struct {
-	Driver     ProviderType         `json:"driver" mapstructure:"driver"`
-	SQL        *config.SQLConfig    `json:"sql" mapstructure:"sql"`
-	Mongo      *config.MongoConfig  `json:"mongo" mapstructure:"mongo"`
-	Policy     *config.HealthPolicy `json:"policy" mapstructure:"policy"`
-	Metrics    MetricsProvider      `json:"-" mapstructure:"-"` // Metrics provider is not configurable via file
-	TraceIDKey string               `json:"trace_id_key" mapstructure:"trace_id_key"`
+	Driver     ProviderType    `json:"driver" mapstructure:"driver"`
+	SQL        *SQLConfig      `json:"sql" mapstructure:"sql"`
+	Mongo      *MongoConfig    `json:"mongo" mapstructure:"mongo"`
+	Policy     *HealthPolicy   `json:"policy" mapstructure:"policy"`
+	Metrics    MetricsProvider `json:"-" mapstructure:"-"` // Metrics provider is not configurable via file
+	TraceIDKey string          `json:"trace_id_key" mapstructure:"trace_id_key"`
 }
 
 // ManagerConfig is used to inject the full database configuration map.
