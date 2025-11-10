@@ -26,8 +26,8 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
-// NewFirebase initializes and returns a new Firebase instance.
-func NewFirebase(ctx context.Context, cfg *Config, opts ...Option) (*Firebase, error) {
+// New initializes and returns a new Firebase instance.
+func New(ctx context.Context, cfg *Config, opts ...Option) (*Firebase, error) {
 	fb := &Firebase{}
 
 	for _, opt := range opts {
@@ -41,14 +41,14 @@ func NewFirebase(ctx context.Context, cfg *Config, opts ...Option) (*Firebase, e
 
 	var credOption option.ClientOption
 
-	if cfg.CredentialJSON != "" {
+	if cfg.CredentialsJSON != "" {
 		fb.logger.Info("Initializing Firebase with credentials from firebase.credentials_json environment variable")
-		credOption = option.WithCredentialsJSON([]byte(cfg.CredentialJSON))
+		credOption = option.WithCredentialsJSON([]byte(cfg.CredentialsJSON))
 	} else if cfg.CredentialsFile != "" {
 		fb.logger.Info("Initializing Firebase with credentials file", "path", cfg.CredentialsFile)
 		credOption = option.WithCredentialsFile(cfg.CredentialsFile)
 	} else {
-		err := errors.New("firebase credentials not found. Set firebase.credentials_json or firebase.credentials_file in config")
+		err := errors.New("firebase credentials not found. Set firebase.credentials_json or firebase.credentials_file in your config")
 		fb.logger.Error(err.Error())
 		return nil, err
 	}

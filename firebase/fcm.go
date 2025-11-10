@@ -2,9 +2,11 @@ package firebase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 
+	fb "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
 )
 
@@ -23,18 +25,33 @@ type FCMClient struct {
 	logger *slog.Logger
 }
 
-// FCMClient returns a new FCMClient instance from the Firebase app.
-func (fb *Firebase) FCMClient() (IFCMClient, error) {
-	client, err := fb.App.Messaging(context.Background())
+// NewFCMClient creates a new FCM client from a specific Firebase app instance.
+// This allows you to have FCM clients for multiple Firebase projects.
+func NewFCMClient(app *fb.App, cfg *Config, logger *slog.Logger) (IFCMClient, error) {
+	client, err := app.Messaging(context.Background())
 	if err != nil {
-		fb.logger.Error("Unable to initialize FCM Client", "error", err)
+		logger.Error("Unable to initialize FCM Client", "error", err)
 		return nil, err
 	}
 
-	logger := fb.logger.With("component", "fcm")
-	logger.Info("Messaging client initialized")
+	// Helper to extract project ID from credentials JSON for logging purposes.
+	var projectID string
+	if cfg.CredentialsJSON != "" {
+		var creds struct {
+			ProjectID string `json:"project_id"`
+		}
+		if err := json.Unmarshal([]byte(cfg.CredentialsJSON), &creds); err == nil {
+			projectID = creds.ProjectID
+		}
+	}
 
-	return &FCMClient{client: client, logger: logger}, nil
+	fcmLogger := logger.With("component", "fcm")
+	if projectID != "" {
+		fcmLogger = fcmLogger.With("project_id", projectID)
+	}
+	fcmLogger.Info("FCM client initialized")
+
+	return &FCMClient{client: client, logger: fcmLogger}, nil
 }
 
 // FCMMessage represents the data and notification payload for an FCM message.
