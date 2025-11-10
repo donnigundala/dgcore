@@ -3,18 +3,17 @@ package cache
 import (
 	"log/slog"
 	"time"
-
-	"github.com/donnigundala/dgcore/config"
 )
 
 // Config defines the top-level configuration for a single cache connection.
+// This struct is now intended to be filled by the consumer app from a config file.
 type Config struct {
 	Driver    Driver        `mapstructure:"driver"`
 	Namespace string        `mapstructure:"namespace"`
 	Separator string        `mapstructure:"separator"`
 	Redis     *RedisConfig  `mapstructure:"redis"`
 	Memcache  *MemcacheConfig `mapstructure:"memcache"`
-	Logger    *slog.Logger  `mapstructure:"-"`
+	Logger    *slog.Logger  `mapstructure:"-"` // Logger is passed programmatically, not from config files.
 }
 
 // RedisConfig holds Redis-specific settings.
@@ -31,29 +30,6 @@ type RedisConfig struct {
 
 // MemcacheConfig holds Memcache-specific settings.
 type MemcacheConfig struct {
-	Servers []string `mapstructure:"servers"`
+	Servers []string      `mapstructure:"servers"`
 	TTL     time.Duration `mapstructure:"ttl"`
-}
-
-// init registers the default configuration values.
-func init() {
-	// Registering defaults for a 'default' cache connection.
-	// A user can define more, like 'caches.session', 'caches.object', etc.
-	config.Add("caches.default", map[string]any{
-		"driver":    "redis",
-		"namespace": "dgcore",
-		"separator": ":",
-		"redis": map[string]any{
-			"host":      "127.0.0.1",
-			"port":      "6379",
-			"password":  "",
-			"db":        0,
-			"ttl":       "1h",
-			"enable_tls": false,
-		},
-		"memcache": map[string]any{
-			"servers": []string{"127.0.0.1:11211"},
-			"ttl":     "1h",
-		},
-	})
 }

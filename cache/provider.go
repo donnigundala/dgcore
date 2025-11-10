@@ -7,11 +7,6 @@ import (
 )
 
 // Provider defines the interface for cache operations.
-//
-// Note: Some methods are emulated in Memcache where not natively supported.
-// - ScanKeys: not supported (returns error)
-// - Ttl: not supported (returns error)
-// - MGet, MDelete, Exists: emulated via loops
 type Provider interface {
 	Ping(ctx context.Context) error
 	Set(ctx context.Context, key string, value any, ttl ...time.Duration) error
@@ -36,11 +31,12 @@ var (
 	DriverMemcache Driver = "memcache"
 )
 
-// Option defines a functional option for configuring the cache.
-type Option func(*Config)
+// ProviderOption defines a functional option for configuring a cache provider.
+type ProviderOption func(*Config)
 
-// WithLogger sets a custom logger for the cache.
-func WithLogger(logger *slog.Logger) Option {
+// WithProviderLogger sets a base logger for the provider factory.
+// The factory will create a sub-logger from this.
+func WithProviderLogger(logger *slog.Logger) ProviderOption {
 	return func(c *Config) {
 		c.Logger = logger
 	}

@@ -2,19 +2,24 @@ package cache
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 )
 
 // New acts as an internal factory for creating a cache Provider.
 // It is called by the CacheManager.
-func New(cfg *Config, opts ...Option) (Provider, error) {
+func New(cfg *Config, opts ...ProviderOption) (Provider, error) {
 	// Apply all the functional options to the config
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	// If no logger was provided, create a default one.
-	// The logger from the manager is passed via WithLogger option.
+	// If no logger was provided by the options (e.g., from the manager),
+	// create a default one.
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+	}
 
 	switch Driver(strings.ToLower(string(cfg.Driver))) {
 	case DriverRedis:
