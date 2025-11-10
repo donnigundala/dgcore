@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"os"
 
 	"github.com/donnigundala/dgcore/config"
 	"github.com/donnigundala/dgcore/database"
-	dbcontracts "github.com/donnigundala/dgcore/database/contracts"
 	dgseeder "github.com/donnigundala/dgcore/seeder"
 	"gorm.io/gorm"
 )
@@ -58,33 +56,32 @@ func main() {
 	// Load config from file (config.yaml) and environment variables
 	config.Load()
 
-	var dbConfigs map[string]*dbcontracts.Config
-	if err := config.Inject("databases", &dbConfigs); err != nil {
+	// Inject the 'databases' section from config into the ManagerConfig struct.
+	var dbManagerConfig database.ManagerConfig
+	if err := config.Inject("databases", &dbManagerConfig); err != nil {
 		appSlog.Error("Failed to inject database configurations", "error", err)
 		os.Exit(1)
 	}
 
-	dbManager := database.Manager()
-	dbManager.SetLogger(appSlog)
-	for name, cfg := range dbConfigs {
-		dbManager.Register(name, cfg)
-	}
-
-	if err := dbManager.ConnectAll(context.Background()); err != nil {
-		appSlog.Error("Failed to connect to databases", "error", err)
+	// Create the DatabaseManager by injecting the configuration.
+	dbManager, err := database.NewManager(dbManagerConfig, database.WithLogger(appSlog))
+	if err != nil {
+		appSlog.Error("Failed to create database manager", "error", err)
 		os.Exit(1)
 	}
 	defer dbManager.Close()
 
 	// --- 2. Get the Database Connection for Seeding ---
 	// We'll seed the 'my_postgres' database connection defined in config.yaml
-	provider := dbManager.Get("my_postgres")
-	if provider == nil {
-		appSlog.Error("Database provider 'my_postgres' not found")
+	provider, err := dbManager.Connection("my_postgres")
+	if err != nil {
+		appSlog.Error("Failed to get 'my_postgres' connection", "error", err)
 		os.Exit(1)
 	}
 
-	writerDB, ok := provider.GetWriter().(*gorm.DB)
+	// Type-assert the provider to get the underlying GORM instance.
+	sqlProvider, ok := provider.(database.SQLProvider)
+	writerDB := sqlProvider.Gorm().(*gorm.DB)
 	if !ok || writerDB == nil {
 		appSlog.Error("Failed to get a valid GORM writer connection")
 		os.Exit(1)

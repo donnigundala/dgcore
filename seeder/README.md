@@ -66,12 +66,11 @@ import (
 
 	"github.com/donnigundala/dgcore/config"
 	"github.com/donnigundala/dgcore/database"
-	dbcontracts "github.com/donnigundala/dgcore/database/contracts"
 	dgseeder "github.com/donnigundala/dgcore/seeder"
 	"gorm.io/gorm"
 
-    // Import your seeder functions
-    "my-app/database/seeders"
+	// Import your seeder functions
+	"my-app/database/seeders"
 )
 
 func main() {
@@ -80,25 +79,32 @@ func main() {
 	slog.SetDefault(appSlog)
 
 	config.Load()
-	var dbConfigs map[string]*dbcontracts.Config
-	if err := config.Inject("databases", &dbConfigs); err != nil {
+
+	// Inject the 'databases' section from config into the ManagerConfig struct.
+	var dbManagerConfig database.ManagerConfig
+	if err := config.Inject("databases", &dbManagerConfig); err != nil {
 		appSlog.Error("Failed to inject database configurations", "error", err)
 		os.Exit(1)
 	}
 
-	dbManager := database.Manager()
-	dbManager.SetLogger(appSlog)
-	for name, cfg := range dbConfigs {
-		dbManager.Register(name, cfg)
-	}
-	if err := dbManager.ConnectAll(context.Background()); err != nil {
-		appSlog.Error("Failed to connect to databases", "error", err)
+	// Create the DatabaseManager by injecting the configuration.
+	dbManager, err := database.NewManager(dbManagerConfig, database.WithLogger(appSlog))
+	if err != nil {
+		appSlog.Error("Failed to create database manager", "error", err)
 		os.Exit(1)
 	}
 	defer dbManager.Close()
 
 	// 2. Get DB connection and instantiate the seeder
-	writerDB := dbManager.Get("my_postgres").GetWriter().(*gorm.DB)
+	provider, err := dbManager.Connection("my_postgres")
+	if err != nil {
+		appSlog.Error("Failed to get 'my_postgres' connection", "error", err)
+		os.Exit(1)
+	}
+
+	// Type-assert the provider to get the underlying GORM instance.
+	sqlProvider, _ := provider.(database.SQLProvider)
+	writerDB := sqlProvider.Gorm().(*gorm.DB)
 	seeder := dgseeder.New(writerDB, appSlog)
 
 	// 3. Register seeder functions and set order
