@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Provider defines the common interface for all database connections.
@@ -28,4 +30,5 @@ type MongoProvider interface {
 	Provider
 	// Client returns the underlying MongoDB client instance.
 	Client() interface{} // Returning interface{} to avoid direct Mongo driver dependency here.
+	Database() *mongo.Database
 }
