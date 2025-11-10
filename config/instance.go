@@ -31,7 +31,7 @@ func (c *Config) Load(paths ...string) error {
 		}
 	}
 
-	LoadWithPaths(paths)
+	LoadWithPaths(paths...)
 	return nil
 }
 
