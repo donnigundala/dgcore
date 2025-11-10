@@ -1,30 +1,37 @@
 package example
 
 import (
-	"github.com/donnigundala/dgcore/migration"
+	"context"
+
 	"gorm.io/gorm"
 )
 
-func init() {
-	migration.Register(&CreateUsersTable{})
+// --- Definisikan Model Anda di sini atau import dari package lain ---
+
+type User struct {
+	gorm.Model
+	Name  string
+	Email string `gorm:"unique"`
 }
 
-// CreateUsersTable creates the users table.
-type CreateUsersTable struct{}
+// --- Definisikan Fungsi Migrasi Anda ---
+// Setiap fungsi migrasi harus sesuai dengan signature `migration.MigrationFunc`.
 
-// Name returns the name of the migration.
-func (m *CreateUsersTable) Name() string {
-	return "20231027_create_users_table"
+// CreateUsersTable membuat tabel users.
+func CreateUsersTable(ctx context.Context, db any) error {
+	// Lakukan type assertion ke *gorm.DB
+	gormDB, ok := db.(*gorm.DB)
+	if !ok {
+		panic("CreateUsersTable expects a *gorm.DB connection")
+	}
+	return gormDB.WithContext(ctx).AutoMigrate(&User{})
 }
 
-// Up creates the users table.
-func (m *CreateUsersTable) Up(tx *gorm.DB) error {
-	return tx.Exec("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255))").Error
+// AddEmailToUsersTable menambahkan kolom email ke tabel users.
+func AddEmailToUsersTable(ctx context.Context, db any) error {
+	gormDB, ok := db.(*gorm.DB)
+	if !ok {
+		panic("AddEmailToUsersTable expects a *gorm.DB connection")
+	}
+	return gormDB.WithContext(ctx).Migrator().AddColumn(&User{}, "Email")
 }
-
-// Down drops the users table.
-func (m *CreateUsersTable) Down(tx *gorm.DB) error {
-	return tx.Exec("DROP TABLE users").Error
-}
-
-var _ migration.SQLMigration = (*CreateUsersTable)(nil)
