@@ -33,6 +33,13 @@ databases:
           user: "postgres"
           password: "password" # Default password, should be overridden by env var
           db_name: "my_app"
+        # comment this replicas block to enable read-only access
+        replicas:
+          - host: "localhost" # In a real scenario, this would be a different host
+            port: "5432"
+            user: "postgres"
+            password: "password"
+            db_name: "my_app_replica" # Or the same DB if using a read-only user
         pool:
           max_open_conns: 20
         log_level: "warn"

@@ -1,16 +1,22 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"os"
 
 	"github.com/donnigundala/dgcore/config"
 	"github.com/donnigundala/dgcore/database"
+	"gorm.io/gorm"
 )
 
 // This example assumes you have a `config` directory next to your executable
 // with a `database.yaml` file inside it.
+
+// User Example User model for demonstration
+type User struct {
+	gorm.Model
+	Name string
+}
 
 func main() {
 	// 1. Initialize a logger for the application.
@@ -43,24 +49,44 @@ func main() {
 
 	slog.Info("Database manager initialized successfully.")
 
-	// 5. Get the default database connection.
+	// 5. Get a specific database connection (e.g., my_postgres).
 	// Use MustConnection for convenience; it panics if not found.
 	// Use Connection() for safe error handling.
-	defaultDB, err := dbManager.Connection() // Gets the default connection
+	dbProvider, err := dbManager.Connection("my_postgres")
 	if err != nil {
-		slog.Error("Failed to get default database connection", "error", err)
+		slog.Error("Failed to get 'my_postgres' database connection", "error", err)
 		os.Exit(1)
 	}
 
-	// 6. Ping the database to check the connection.
-	slog.Info("Pinging default database...")
-	if err := defaultDB.Ping(context.Background()); err != nil {
-		slog.Error("Failed to ping default database", "error", err)
-	} else {
-		slog.Info("Default database ping successful!")
+	// 6. Type-assert to get the GORM instance
+	sqlProvider, ok := dbProvider.(database.SQLProvider)
+	if !ok {
+		slog.Error("Connection is not a SQL provider")
+		os.Exit(1)
+	}
+	gormDB := sqlProvider.Gorm().(*gorm.DB)
+
+	// 7. Perform Operations
+	slog.Info("--- Performing DB Operations ---")
+	if err := gormDB.AutoMigrate(&User{}); err != nil {
+		slog.Warn("Could not migrate User model", "error", err)
 	}
 
-	// You can also get a specific connection by name
-	// myPostgres, err := dbManager.Connection("my_postgres")
-	// ...
+	// This WRITE operation will automatically go to the PRIMARY node.
+	slog.Info("Creating a new user (WRITE operation)...")
+	newUser := User{Name: "Framework User"}
+	if err := gormDB.Create(&newUser).Error; err != nil {
+		slog.Error("Failed to create user", "error", err)
+	} else {
+		slog.Info("Created user", "name", newUser.Name, "id", newUser.ID)
+	}
+
+	// This READ operation will automatically be load-balanced across the REPLICAS.
+	slog.Info("Fetching the user (READ operation)...")
+	var fetchedUser User
+	if err := gormDB.First(&fetchedUser, newUser.ID).Error; err != nil {
+		slog.Error("Failed to read user", "error", err)
+	} else {
+		slog.Info("Fetched user", "name", fetchedUser.Name, "id", fetchedUser.ID)
+	}
 }
