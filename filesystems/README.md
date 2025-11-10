@@ -18,44 +18,40 @@ go get github.com/donnigundala/dg-framework/core/filesystems
 
 ## Quick Start
 
-### 1. Define Your Configuration
+### 1. Define Your Configuration (YAML)
 
-Create a configuration that defines all your storage "disks". This can be loaded from a JSON/YAML file or defined in code.
+Create a YAML file (e.g., `config/filesystems.yaml`) that defines all your storage "disks". The framework's configuration loader will automatically handle loading this file and overriding values with environment variables.
 
 ```go
-import "github.com/donnigundala/dg-framework/core/filesystems"
+```yaml
+# config/filesystems.yaml
 
-config := filesystems.ManagerConfig{
-    Default: "local", // Specify the default disk
-    Disks: map[string]filesystems.Disk{
-        "local": {
-            Driver: "local",
-            Config: map[string]interface{}{
-                "basePath": "./storage/app",
-                "baseURL":  "http://localhost:8080/storage",
-            },
-        },
-        "s3_public": {
-            Driver: "s3",
-            Config: map[string]interface{}{
-                "bucket":    "my-public-assets-bucket",
-                "region":    "us-east-1",
-                "accessKey": "YOUR_AWS_ACCESS_KEY",
-                "secretKey": "YOUR_AWS_SECRET_KEY",
-                "baseURL":   "https://my-public-assets-bucket.s3.us-east-1.amazonaws.com",
-            },
-        },
-        "s3_private": {
-            Driver: "s3",
-            Config: map[string]interface{}{
-                "bucket":    "my-private-files-bucket",
-                "region":    "us-east-1",
-                "accessKey": "YOUR_AWS_ACCESS_KEY",
-                "secretKey": "YOUR_AWS_SECRET_KEY",
-            },
-        },
-    },
-}
+filesystems:
+  default: "local" # Specify the default disk
+
+  disks:
+    local:
+      driver: "local"
+      config:
+        basePath: "./storage/app"
+        baseURL:  "http://localhost:8080/storage"
+
+    s3_public:
+      driver: "s3"
+      config:
+        bucket:    "my-public-assets-bucket"
+        region:    "us-east-1"
+        accessKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PUBLIC_CONFIG_ACCESSKEY
+        secretKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PUBLIC_CONFIG_SECRETKEY
+        baseURL:   "https://my-public-assets-bucket.s3.us-east-1.amazonaws.com"
+
+    s3_private:
+      driver: "s3"
+      config:
+        bucket:    "my-private-files-bucket"
+        region:    "us-east-1"
+        accessKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PRIVATE_CONFIG_ACCESSKEY
+        secretKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PRIVATE_CONFIG_SECRETKEY
 ```
 
 ### 2. Create the FileSystem Manager

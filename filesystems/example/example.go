@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/donnigundala/dgcore/config"
 	"github.com/donnigundala/dgcore/filesystems"
 	"github.com/google/uuid"
 )
@@ -17,36 +18,23 @@ const TraceIDKey = CtxKey("trace_id")
 
 func main() {
 	// 1. Create a logger.
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
+	slog.SetDefault(logger)
 
-	// 2. Define your storage configuration.
-	config := filesystems.ManagerConfig{
-		Default: "local",
-		Disks: map[string]filesystems.Disk{
-			"local": {
-				Driver: "local",
-				Config: map[string]interface{}{
-					"basePath": "./storage/app",
-					"baseURL":  "http://localhost:8080/storage",
-				},
-			},
-			"s3_public": {
-				Driver: "s3",
-				Config: map[string]interface{}{
-					"bucket":    "your-public-s3-bucket",
-					"region":    "us-east-1",
-					"accessKey": "YOUR_AWS_ACCESS_KEY",
-					"secretKey": "YOUR_AWS_SECRET_KEY",
-					"baseURL":   "https://your-public-s3-bucket.s3.us-east-1.amazonaws.com",
-				},
-			},
-		},
+	// 2. Load configuration from files (e.g., ./config/*.yaml) and environment variables.
+	config.Load()
+
+	// 3. Inject the 'filesystems' configuration into a struct.
+	var fsManagerConfig filesystems.ManagerConfig
+	if err := config.Inject("filesystems", &fsManagerConfig); err != nil {
+		logger.Error("Failed to inject filesystem configuration", "error", err)
+		os.Exit(1)
 	}
 
-	// 3. Create the FileSystem manager, providing the logger and trace ID key as options.
-	fs, err := filesystems.New(config,
+	// 4. Create the FileSystem manager by injecting the config struct.
+	fs, err := filesystems.New(fsManagerConfig,
 		filesystems.WithLogger(logger),
 		filesystems.WithTraceIDKey(TraceIDKey),
 	)
@@ -57,13 +45,13 @@ func main() {
 
 	logger.Info("=== Filesystem Manager Example Starting ===")
 
-	// 4. Create a context with a trace ID.
+	// 5. Create a context with a trace ID.
 	traceID := uuid.New().String()
 	ctx := context.WithValue(context.Background(), TraceIDKey, traceID)
 
 	logger.InfoContext(ctx, "Starting file operations with trace ID")
 
-	// 5. Use the manager. The trace ID will now be automatically included in all logs.
+	// 6. Use the manager. The trace ID will now be automatically included in all logs.
 	localKey := "example-file.txt"
 	localData := strings.NewReader("This file will have a trace ID in its logs.")
 	err = fs.Upload(ctx, localKey, localData, int64(localData.Len()), filesystems.VisibilityPublic)
