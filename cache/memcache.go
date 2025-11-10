@@ -19,20 +19,24 @@ type memcache struct {
 	logger *slog.Logger
 }
 
-// newMemcache creates and initializes a Memcache client.
-func newMemcache(cfg *Config) (Provider, error) {
+// newMemcacheProvider creates and initializes a Memcache client.
+func newMemcacheProvider(cfg *Config) (Provider, error) {
 	logger := cfg.Logger.With("driver", "memcache")
 
-	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
-	mc := goMemcache.New(addr)
+	if cfg.Memcache == nil || len(cfg.Memcache.Servers) == 0 {
+		return nil, errors.New("memcache configuration is missing or has no servers defined")
+	}
+
+	// The gomemcache client accepts one or more server addresses.
+	mc := goMemcache.New(cfg.Memcache.Servers...)
 
 	// Use Ping to verify the connection, as it's more direct.
 	if err := mc.Ping(); err != nil {
-		logger.Error("failed to connect to memcache", "error", err)
-		return nil, fmt.Errorf("failed to connect to memcache: %w", err)
+		logger.Error("failed to connect to memcache", "servers", cfg.Memcache.Servers, "error", err)
+		return nil, fmt.Errorf("failed to connect to memcache servers %v: %w", cfg.Memcache.Servers, err)
 	}
 
-	logger.Info("successfully connected to memcache", "host", cfg.Host, "port", cfg.Port)
+	logger.Info("successfully connected to memcache", "servers", cfg.Memcache.Servers)
 
 	return &memcache{client: mc, config: cfg, logger: logger}, nil
 }
@@ -53,7 +57,7 @@ func (m *memcache) Ping(ctx context.Context) error {
 
 // Set stores a key-value pair in Memcache with an optional expiration duration.
 func (m *memcache) Set(ctx context.Context, key string, value any, ttl ...time.Duration) error {
-	expiration := m.config.TTL
+	expiration := m.config.Memcache.TTL
 	if len(ttl) > 0 {
 		expiration = ttl[0]
 	}
@@ -121,12 +125,37 @@ func (m *memcache) MGet(ctx context.Context, keys []string, dests []any) error {
 		return fmt.Errorf("MGet: keys and destinations length mismatch")
 	}
 
+	fullKeys := make([]string, len(keys))
+	for i, k := range keys {
+		fullKeys[i] = m.buildKey(k)
+	}
+
+	items, err := m.client.GetMulti(fullKeys)
+	if err != nil {
+		m.logger.Warn("failed to mget keys", "error", err)
+		return err
+	}
+
 	for i, key := range keys {
-		if err := m.Get(ctx, key, dests[i]); err != nil {
-			m.logger.Warn("failed to get key in mget", "key", key, "error", err)
-			return fmt.Errorf("MGet: failed on key '%s': %w", key, err)
+		fullKey := m.buildKey(key)
+		item, ok := items[fullKey]
+		if !ok {
+			continue // key not found
+		}
+
+		switch d := dests[i].(type) {
+		case *string:
+			*d = string(item.Value)
+		case *[]byte:
+			*d = item.Value
+		default:
+			if err := json.Unmarshal(item.Value, dests[i]); err != nil {
+				m.logger.Error("failed to unmarshal JSON in mget", "key", key, "error", err)
+				return fmt.Errorf("memcache: failed to unmarshal JSON for key %s: %w", key, err)
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -158,7 +187,7 @@ func (m *memcache) Incr(ctx context.Context, key string) (int64, error) {
 		item := &goMemcache.Item{
 			Key:        fullKey,
 			Value:      []byte("1"),
-			Expiration: int32(m.config.TTL.Seconds()),
+			Expiration: int32(m.config.Memcache.TTL.Seconds()),
 		}
 		if err := m.client.Add(item); err != nil {
 			m.logger.Error("failed to initialize key for incr", "key", key, "error", err)
@@ -182,7 +211,7 @@ func (m *memcache) Decr(ctx context.Context, key string) (int64, error) {
 		item := &goMemcache.Item{
 			Key:        fullKey,
 			Value:      []byte("0"), // Decrementing a non-existent key results in 0
-			Expiration: int32(m.config.TTL.Seconds()),
+			Expiration: int32(m.config.Memcache.TTL.Seconds()),
 		}
 		if err := m.client.Add(item); err != nil {
 			m.logger.Error("failed to initialize key for decr", "key", key, "error", err)

@@ -20,18 +20,18 @@ type redis struct {
 	logger *slog.Logger
 }
 
-// newRedis creates and initializes a Redis client.
-func newRedis(cfg *Config) (Provider, error) {
+// newRedisProvider creates and initializes a Redis client.
+func newRedisProvider(cfg *Config) (Provider, error) {
 	logger := cfg.Logger.With("driver", "redis")
 
 	options := &goRedis.Options{
-		Addr:     fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
-		Password: cfg.Password,
-		DB:       cfg.DB,
-		Username: cfg.Username,
+		Addr:     fmt.Sprintf("%s:%s", cfg.Redis.Host, cfg.Redis.Port),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+		Username: cfg.Redis.Username,
 	}
 
-	if cfg.EnableTLS {
+	if cfg.Redis.EnableTLS {
 		options.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true, // Consider making this configurable
 		}
@@ -43,7 +43,7 @@ func newRedis(cfg *Config) (Provider, error) {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	logger.Info("successfully connected to redis", "host", cfg.Host, "port", cfg.Port)
+	logger.Info("successfully connected to redis", "host", cfg.Redis.Host, "port", cfg.Redis.Port)
 
 	return &redis{client: rdb, config: cfg, logger: logger}, nil
 }
@@ -64,7 +64,7 @@ func (r *redis) Ping(ctx context.Context) error {
 
 // Set stores a key-value pair in Redis with optional expiration.
 func (r *redis) Set(ctx context.Context, key string, value any, ttl ...time.Duration) error {
-	expiration := r.config.TTL
+	expiration := r.config.Redis.TTL
 	if len(ttl) > 0 {
 		expiration = ttl[0]
 	}
@@ -136,9 +136,17 @@ func (r *redis) MGet(ctx context.Context, keys []string, dests []any) error {
 		if val == nil {
 			continue // missing key
 		}
-		if err := r.Get(ctx, keys[i], dests[i]); err != nil {
-			r.logger.Warn("failed to get key in mget", "key", keys[i], "error", err)
-			return fmt.Errorf("MGet: failed to get key %s: %w", keys[i], err)
+
+		switch d := dests[i].(type) {
+		case *string:
+			*d = val.(string)
+		case *[]byte:
+			*d = []byte(val.(string))
+		default:
+			if err := json.Unmarshal([]byte(val.(string)), dests[i]); err != nil {
+				r.logger.Warn("failed to unmarshal value in mget", "key", keys[i], "error", err)
+				return fmt.Errorf("MGet: failed to unmarshal value for key %s: %w", keys[i], err)
+			}
 		}
 	}
 	return nil
