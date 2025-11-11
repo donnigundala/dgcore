@@ -8,12 +8,12 @@ import (
 // Config defines the top-level configuration for a single cache connection.
 // This struct is now intended to be filled by the consumer app from a config file.
 type Config struct {
-	Driver    Driver        `mapstructure:"driver"`
-	Namespace string        `mapstructure:"namespace"`
-	Separator string        `mapstructure:"separator"`
-	Redis     *RedisConfig  `mapstructure:"redis"`
+	Driver    Driver          `mapstructure:"driver"`
+	Namespace string          `mapstructure:"namespace"`
+	Separator string          `mapstructure:"separator"`
+	Redis     *RedisConfig    `mapstructure:"redis"`
 	Memcache  *MemcacheConfig `mapstructure:"memcache"`
-	Logger    *slog.Logger  `mapstructure:"-"` // Logger is passed programmatically, not from config files.
+	Logger    *slog.Logger    `mapstructure:"-"` // Logger is passed programmatically, not from config files.
 }
 
 // RedisConfig holds Redis-specific settings.
