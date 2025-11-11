@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// New acts as an internal factory for creating a cache Provider.
-// It is called by the CacheManager.
-func New(cfg *Config, opts ...ProviderOption) (Provider, error) {
+// newProvider acts as an internal factory for creating a cache Provider.
+// It is called by the Manager.
+func newProvider(cfg *Config, opts ...ProviderOption) (Provider, error) {
 	// Apply all the functional options to the config
 	for _, opt := range opts {
 		opt(cfg)

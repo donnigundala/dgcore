@@ -8,30 +8,30 @@ import (
 	"sync"
 )
 
-// CacheManager handles the lifecycle of all cache connections.
-// It is no longer a singleton and must be created with NewManager.
-type CacheManager struct {
+// Manager handles the lifecycle of all cache connections.
+// It is no longer a singleton and must be created with New.
+type Manager struct {
 	mu          sync.RWMutex
 	connections map[string]Provider
 	logger      *slog.Logger
 }
 
-// ManagerOption configures a CacheManager.
-type ManagerOption func(*CacheManager)
+// Option configures a Manager.
+type Option func(*Manager)
 
 // WithLogger provides a slog logger for the cache manager.
-func WithLogger(logger *slog.Logger) ManagerOption {
-	return func(m *CacheManager) {
+func WithLogger(logger *slog.Logger) Option {
+	return func(m *Manager) {
 		if logger != nil {
 			m.logger = logger.With("component", "cache_manager")
 		}
 	}
 }
 
-// NewManager creates a new instance of the CacheManager from a map of configurations.
+// New creates a new instance of the Manager from a map of configurations.
 // This is the primary entry point for creating a cache manager.
-func NewManager(configs map[string]*Config, opts ...ManagerOption) (*CacheManager, error) {
-	m := &CacheManager{
+func New(configs map[string]*Config, opts ...Option) (*Manager, error) {
+	m := &Manager{
 		connections: make(map[string]Provider),
 		// Default to a silent logger, can be overridden by WithLogger.
 		logger: slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "cache_manager"),
@@ -51,7 +51,7 @@ func NewManager(configs map[string]*Config, opts ...ManagerOption) (*CacheManage
 	for name, cfg := range configs {
 		// Pass the manager's logger down to the provider factory.
 		// The factory will then create a sub-logger for the specific driver.
-		provider, err := New(cfg, WithProviderLogger(m.logger))
+		provider, err := newProvider(cfg, WithProviderLogger(m.logger))
 		if err != nil {
 			m.logger.Error("Failed to connect to cache.", "cache_name", name, "error", err)
 			return nil, fmt.Errorf("failed to connect to cache '%s': %w", name, err)
@@ -65,7 +65,7 @@ func NewManager(configs map[string]*Config, opts ...ManagerOption) (*CacheManage
 
 // Get returns the cache provider for the given name.
 // It returns an error if the provider is not found.
-func (m *CacheManager) Get(name string) (Provider, error) {
+func (m *Manager) Get(name string) (Provider, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -77,7 +77,7 @@ func (m *CacheManager) Get(name string) (Provider, error) {
 }
 
 // MustGet is like Get but panics if the provider is not found.
-func (m *CacheManager) MustGet(name string) Provider {
+func (m *Manager) MustGet(name string) Provider {
 	provider, err := m.Get(name)
 	if err != nil {
 		panic(err)
@@ -86,7 +86,7 @@ func (m *CacheManager) MustGet(name string) Provider {
 }
 
 // Close gracefully closes all managed cache connections.
-func (m *CacheManager) Close() error {
+func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

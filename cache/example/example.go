@@ -32,22 +32,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 4. Create a new CacheManager by injecting the loaded configurations.
+	// 4. Create a new Manager by injecting the loaded configurations.
 	// This is the new Dependency Injection pattern.
-	cacheManager, err := cache.NewManager(cacheConfigs, cache.WithLogger(logger))
+	manager, err := cache.New(cacheConfigs, cache.WithLogger(logger))
 	if err != nil {
 		slog.Error("Failed to create cache manager", "error", err)
 		os.Exit(1)
 	}
-	defer cacheManager.Close()
+	defer manager.Close()
 
 	slog.Info("Cache manager initialized successfully.")
 
 	// 5. Get a specific cache provider.
 	// Using MustGet for convenience; it panics if the disk is not found.
 	// Use Get() for safe error handling.
-	redisCache := cacheManager.MustGet("default")
-	memcacheCache := cacheManager.MustGet("session")
+	redisCache := manager.MustGet("default")
+	memcacheCache := manager.MustGet("session")
 
 	// 6. Use the cache providers.
 	ctx := context.Background()
