@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// Driver defines the type for cache driver names.
+type Driver string
+
+var (
+	DriverRedis    Driver = "redis"
+	DriverMemcache Driver = "memcache"
+)
+
 // Config defines the top-level configuration for a single cache connection.
 // This struct is now intended to be filled by the consumer app from a config file.
 type Config struct {

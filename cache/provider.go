@@ -2,7 +2,10 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -23,21 +26,37 @@ type Provider interface {
 	Close() error
 }
 
-// Driver defines the type for cache driver names.
-type Driver string
+// providerOption defines a functional option for configuring a cache provider.
+type providerOption func(*Config)
 
-var (
-	DriverRedis    Driver = "redis"
-	DriverMemcache Driver = "memcache"
-)
-
-// ProviderOption defines a functional option for configuring a cache provider.
-type ProviderOption func(*Config)
-
-// WithProviderLogger sets a base logger for the provider factory.
+// withProviderLogger sets a base logger for the provider factory.
 // The factory will create a sub-logger from this.
-func WithProviderLogger(logger *slog.Logger) ProviderOption {
+func withProviderLogger(logger *slog.Logger) providerOption {
 	return func(c *Config) {
 		c.Logger = logger
+	}
+}
+
+// newProvider acts as an internal factory for creating a cache Provider.
+// It is called by the Manager.
+func newProvider(cfg *Config, opts ...providerOption) (Provider, error) {
+	// Apply all the functional options to the config
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// If no logger was provided by the options (e.g., from the manager),
+	// create a default one.
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+	}
+
+	switch Driver(strings.ToLower(string(cfg.Driver))) {
+	case DriverRedis:
+		return newRedisProvider(cfg)
+	case DriverMemcache:
+		return newMemcacheProvider(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported cache driver: %s", cfg.Driver)
 	}
 }

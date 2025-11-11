@@ -34,12 +34,17 @@ func main() {
 
 	// 4. Create a new Manager by injecting the loaded configurations.
 	// This is the new Dependency Injection pattern.
-	manager, err := cache.New(cacheConfigs, cache.WithLogger(logger))
+	manager, err := cache.NewManager(cacheConfigs, cache.WithLogger(logger))
 	if err != nil {
 		slog.Error("Failed to create cache manager", "error", err)
 		os.Exit(1)
 	}
-	defer manager.Close()
+	defer func(manager *cache.Manager) {
+		err := manager.Close()
+		if err != nil {
+			slog.Error("Failed to close cache manager", "error", err)
+		}
+	}(manager)
 
 	slog.Info("Cache manager initialized successfully.")
 

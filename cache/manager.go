@@ -16,11 +16,11 @@ type Manager struct {
 	logger      *slog.Logger
 }
 
-// Option configures a Manager.
-type Option func(*Manager)
+// ManagerOption configures a Manager.
+type ManagerOption func(*Manager)
 
 // WithLogger provides a slog logger for the cache manager.
-func WithLogger(logger *slog.Logger) Option {
+func WithLogger(logger *slog.Logger) ManagerOption {
 	return func(m *Manager) {
 		if logger != nil {
 			m.logger = logger.With("component", "cache_manager")
@@ -28,9 +28,9 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
-// New creates a new instance of the Manager from a map of configurations.
+// NewManager creates a new instance of the Manager from a map of configurations.
 // This is the primary entry point for creating a cache manager.
-func New(configs map[string]*Config, opts ...Option) (*Manager, error) {
+func NewManager(configs map[string]*Config, opts ...ManagerOption) (*Manager, error) {
 	m := &Manager{
 		connections: make(map[string]Provider),
 		// Default to a silent logger, can be overridden by WithLogger.
@@ -51,7 +51,7 @@ func New(configs map[string]*Config, opts ...Option) (*Manager, error) {
 	for name, cfg := range configs {
 		// Pass the manager's logger down to the provider factory.
 		// The factory will then create a sub-logger for the specific driver.
-		provider, err := newProvider(cfg, WithProviderLogger(m.logger))
+		provider, err := newProvider(cfg, withProviderLogger(m.logger))
 		if err != nil {
 			m.logger.Error("Failed to connect to cache.", "cache_name", name, "error", err)
 			return nil, fmt.Errorf("failed to connect to cache '%s': %w", name, err)
