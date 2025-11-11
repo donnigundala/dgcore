@@ -9,24 +9,24 @@ import (
 
 // HealthChecker periodically pings database connections to ensure they are live.
 type HealthChecker struct {
-	manager    *DatabaseManager
-	interval   time.Duration
-	ticker     *time.Ticker
-	quit       chan struct{}
-	logger     *slog.Logger
-	checkNow   chan bool
-	endpoints  []string
+	manager   *Manager
+	interval  time.Duration
+	ticker    *time.Ticker
+	quit      chan struct{}
+	logger    *slog.Logger
+	checkNow  chan bool
+	endpoints []string
 }
 
-// NewHealthChecker creates a new checker for the given DatabaseManager.
-func NewHealthChecker(m *DatabaseManager, interval time.Duration, endpoints []string, logger *slog.Logger) *HealthChecker {
+// NewHealthChecker creates a new checker for the given Manager.
+func NewHealthChecker(m *Manager, interval time.Duration, endpoints []string, logger *slog.Logger) *HealthChecker {
 	return &HealthChecker{
-		manager:    m,
-		interval:   interval,
-		quit:       make(chan struct{}),
-		logger:     logger.With("component", "db_health_checker"),
-		checkNow:   make(chan bool, 1),
-		endpoints:  endpoints,
+		manager:   m,
+		interval:  interval,
+		quit:      make(chan struct{}),
+		logger:    logger.With("component", "db_health_checker"),
+		checkNow:  make(chan bool, 1),
+		endpoints: endpoints,
 	}
 }
 

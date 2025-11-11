@@ -23,41 +23,48 @@ type MinIOConfig struct {
 	BaseURL         string
 }
 
-// register converter and driver
-func init() {
-	RegisterConfigConverter("minio", func(cfg map[string]interface{}) (interface{}, error) {
-		m := MinIOConfig{}
-		if v, ok := cfg["endpoint"].(string); ok {
-			m.Endpoint = v
-		}
-		if v, ok := cfg["accessKeyID"].(string); ok {
-			m.AccessKeyID = v
-		}
-		if v, ok := cfg["secretAccessKey"].(string); ok {
-			m.SecretAccessKey = v
-		}
-		if v, ok := cfg["useSSL"].(bool); ok {
-			m.UseSSL = v
-		}
-		if v, ok := cfg["bucket"].(string); ok {
-			m.Bucket = v
-		}
-		if v, ok := cfg["baseURL"].(string); ok {
-			m.BaseURL = v
-		}
-		if m.Endpoint == "" || m.Bucket == "" || m.AccessKeyID == "" || m.SecretAccessKey == "" {
-			return nil, fmt.Errorf("minio: endpoint, bucket, accessKeyID and secretAccessKey are required")
-		}
-		return m, nil
-	})
-
-	RegisterDriver("minio", func(cfg interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
-		c, ok := cfg.(MinIOConfig)
+// newMinioDriver is the constructor for the MinIO driver, returning a Storage interface.
+func newMinioDriver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+	cfg, ok := config.(MinIOConfig)
+	if !ok {
+		raw, ok := config.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("invalid config type for minio")
+			return nil, fmt.Errorf("invalid config type for minio driver: %T", config)
 		}
-		return NewMinioDriver(c, logger, traceIDKey)
-	})
+		converted, err := convertMinioConfig(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert config for minio driver: %w", err)
+		}
+		cfg = converted
+	}
+	return newMinioDriverInternal(cfg, logger, traceIDKey)
+}
+
+// convertMinioConfig handles the conversion from a map to MinIOConfig struct.
+func convertMinioConfig(cfg map[string]interface{}) (MinIOConfig, error) {
+	m := MinIOConfig{}
+	if v, ok := cfg["endpoint"].(string); ok {
+		m.Endpoint = v
+	}
+	if v, ok := cfg["accessKeyID"].(string); ok {
+		m.AccessKeyID = v
+	}
+	if v, ok := cfg["secretAccessKey"].(string); ok {
+		m.SecretAccessKey = v
+	}
+	if v, ok := cfg["useSSL"].(bool); ok {
+		m.UseSSL = v
+	}
+	if v, ok := cfg["bucket"].(string); ok {
+		m.Bucket = v
+	}
+	if v, ok := cfg["baseURL"].(string); ok {
+		m.BaseURL = v
+	}
+	if m.Endpoint == "" || m.Bucket == "" || m.AccessKeyID == "" || m.SecretAccessKey == "" {
+		return m, fmt.Errorf("minio: endpoint, bucket, accessKeyID and secretAccessKey are required")
+	}
+	return m, nil
 }
 
 // MinioDriver implements Storage using MinIO.
@@ -68,7 +75,8 @@ type MinioDriver struct {
 	traceIDKey any
 }
 
-func NewMinioDriver(cfg MinIOConfig, logger *slog.Logger, traceIDKey any) (*MinioDriver, error) {
+// newMinioDriverInternal is the internal constructor for MinioDriver.
+func newMinioDriverInternal(cfg MinIOConfig, logger *slog.Logger, traceIDKey any) (*MinioDriver, error) {
 	minioClient, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  creds.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		Secure: cfg.UseSSL,

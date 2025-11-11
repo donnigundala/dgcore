@@ -30,17 +30,22 @@ func main() {
 
 	// 3. Create the FirebaseManager
 	ctx := context.Background()
-	fbManager, err := firebase.NewManager(ctx, firebaseConfigs, firebase.WithManagerLogger(appSlog))
+	manager, err := firebase.NewManager(ctx, firebaseConfigs, firebase.WithLogger(appSlog))
 	if err != nil {
 		slog.Error("Failed to create firebase manager", "error", err)
 		os.Exit(1)
 	}
-	defer fbManager.Close() // Though it's a no-op, it's good practice
+	defer func(manager *firebase.Manager) {
+		err := manager.Close()
+		if err != nil {
+			slog.Error("Failed to close firebase manager", "error", err)
+		}
+	}(manager) // Though it's a no-op, it's good practice
 
 	slog.Info("Firebase manager initialized successfully.")
 
 	// 4. Get a specific Firebase app instance
-	defaultApp := fbManager.MustApp("default")
+	defaultApp := manager.MustApp("default")
 
 	// 5. Get the corresponding config to pass to service clients
 	defaultConfig, ok := firebaseConfigs["default"]

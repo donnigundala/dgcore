@@ -10,8 +10,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/plugin/dbresolver"
 	gormlogger "gorm.io/gorm/logger"
+	"gorm.io/plugin/dbresolver"
 )
 
 // sqlProvider implements the SQLProvider interface using GORM.
@@ -20,8 +20,8 @@ type sqlProvider struct {
 	logger *slog.Logger
 }
 
-// NewSQLProvider creates a new GORM-based SQL provider.
-func NewSQLProvider(ctx context.Context, cfg *SQLConfig, policy *PolicyConfig, logger *slog.Logger) (Provider, error) {
+// newSQLProvider creates a new GORM-based SQL provider.
+func newSQLProvider(ctx context.Context, cfg *SQLConfig, policy *PolicyConfig, logger *slog.Logger) (Provider, error) {
 	dsn := buildDSN(&cfg.Primary, cfg.DriverName)
 	if dsn == "" {
 		return nil, fmt.Errorf("could not build DSN for driver: %s", cfg.DriverName)

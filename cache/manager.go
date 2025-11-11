@@ -9,7 +9,6 @@ import (
 )
 
 // Manager handles the lifecycle of all cache connections.
-// It is no longer a singleton and must be created with New.
 type Manager struct {
 	mu          sync.RWMutex
 	connections map[string]Provider

@@ -28,7 +28,7 @@ func main() {
 
 	// 3. Define a struct to hold the database manager configuration.
 	// The top-level key in your YAML file should be "databases".
-	var dbManagerConfig database.ManagerConfig
+	var dbManagerConfig database.Config
 	if err := config.Inject("databases", &dbManagerConfig); err != nil {
 		slog.Error("Failed to inject database configuration", "error", err)
 		os.Exit(1)
@@ -40,7 +40,7 @@ func main() {
 		slog.Error("Failed to create database manager", "error", err)
 		os.Exit(1)
 	}
-	defer func(dbManager *database.DatabaseManager) {
+	defer func(dbManager *database.Manager) {
 		err := dbManager.Close()
 		if err != nil {
 			slog.Error("Failed to close database manager", "error", err)

@@ -20,8 +20,8 @@ type Manager struct {
 // ManagerOption configures a Manager.
 type ManagerOption func(*Manager)
 
-// WithManagerLogger provides a slog logger for the firebase manager.
-func WithManagerLogger(logger *slog.Logger) ManagerOption {
+// WithLogger provides a slog logger for the firebase manager.
+func WithLogger(logger *slog.Logger) ManagerOption {
 	return func(m *Manager) {
 		if logger != nil {
 			m.log = logger.With("component", "firebase_manager")
@@ -49,7 +49,7 @@ func NewManager(ctx context.Context, configs map[string]*Config, opts ...Manager
 
 	for name, cfg := range configs {
 		// Pass the manager's logger down to the provider factory.
-		app, err := New(ctx, cfg, WithLogger(m.log))
+		app, err := newFirebaseApp(ctx, cfg, withAppLogger(m.log))
 		if err != nil {
 			m.log.Error("Failed to initialize Firebase app.", "app_name", name, "error", err)
 			return nil, fmt.Errorf("failed to initialize Firebase app '%s': %w", name, err)

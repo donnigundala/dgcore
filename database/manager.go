@@ -9,29 +9,29 @@ import (
 	"sync"
 )
 
-// DatabaseManager handles the lifecycle of all database connections.
-type DatabaseManager struct {
+// Manager handles the lifecycle of all database connections.
+type Manager struct {
 	mu                sync.RWMutex
 	connections       map[string]Provider
 	defaultConnection string
 	logger            *slog.Logger
 }
 
-// ManagerOption configures a DatabaseManager.
-type ManagerOption func(*DatabaseManager)
+// ManagerOption configures a Manager.
+type ManagerOption func(*Manager)
 
 // WithLogger provides a slog logger for the database manager.
 func WithLogger(logger *slog.Logger) ManagerOption {
-	return func(m *DatabaseManager) {
+	return func(m *Manager) {
 		if logger != nil {
 			m.logger = logger.With("component", "database_manager")
 		}
 	}
 }
 
-// NewManager creates a new instance of the DatabaseManager from a configuration struct.
-func NewManager(cfg ManagerConfig, opts ...ManagerOption) (*DatabaseManager, error) {
-	m := &DatabaseManager{
+// NewManager creates a new instance of the Manager from a configuration struct.
+func NewManager(cfg Config, opts ...ManagerOption) (*Manager, error) {
+	m := &Manager{
 		connections: make(map[string]Provider),
 		logger:      slog.New(slog.NewTextHandler(os.Stdout, nil)).With("component", "database_manager"),
 	}
@@ -48,7 +48,7 @@ func NewManager(cfg ManagerConfig, opts ...ManagerOption) (*DatabaseManager, err
 	m.logger.Info("Initializing database manager...", "connection_count", len(cfg.Connections))
 
 	for name, connCfg := range cfg.Connections {
-		provider, err := New(context.Background(), name, connCfg, m.logger)
+		provider, err := newProvider(context.Background(), name, connCfg, m.logger)
 		if err != nil {
 			m.logger.Error("Failed to connect to database", "connection", name, "error", err)
 			return nil, fmt.Errorf("failed to connect to '%s': %w", name, err)
@@ -67,7 +67,7 @@ func NewManager(cfg ManagerConfig, opts ...ManagerOption) (*DatabaseManager, err
 
 // Connection returns a specific database provider by name.
 // If the name is empty, it returns the default connection.
-func (m *DatabaseManager) Connection(name ...string) (Provider, error) {
+func (m *Manager) Connection(name ...string) (Provider, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -90,7 +90,7 @@ func (m *DatabaseManager) Connection(name ...string) (Provider, error) {
 }
 
 // MustConnection is like Connection but panics if the provider is not found.
-func (m *DatabaseManager) MustConnection(name ...string) Provider {
+func (m *Manager) MustConnection(name ...string) Provider {
 	provider, err := m.Connection(name...)
 	if err != nil {
 		panic(err)
@@ -99,7 +99,7 @@ func (m *DatabaseManager) MustConnection(name ...string) Provider {
 }
 
 // Close gracefully closes all managed database connections.
-func (m *DatabaseManager) Close() error {
+func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

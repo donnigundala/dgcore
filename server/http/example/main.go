@@ -42,7 +42,7 @@ func main() {
 	// --- 5. Create and Start the Server ---
 	// Create the server from the injected configuration struct.
 	// We also inject the application's logger.
-	srv := dghttp.NewServerFromConfig(&serverCfg, mux, dghttp.WithLogger(appSlog))
+	srv := dghttp.NewServer(&serverCfg, mux, dghttp.WithLogger(appSlog))
 
 	// Start the server in a non-blocking way.
 	err := srv.Start()

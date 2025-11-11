@@ -11,8 +11,7 @@ import (
 	"time"
 )
 
-// Server struct holds only the final values.
-// --- 1. Core Server Struct ---
+// Server struct holds the configured http.Server and related components.
 type Server struct {
 	server      *http.Server
 	logger      *slog.Logger
@@ -21,14 +20,14 @@ type Server struct {
 	shutdownCh  chan struct{} // Channel to signal shutdown completion
 }
 
-// Option The heart of the pattern.
-// --- 2. Option Type ---
-type Option func(*Server)
+// ServerOption configures an Server.
+type ServerOption func(*Server)
 
 // maxHeaderBytes defines the maximum size of HTTP headers (1MB).
 const maxHeaderBytes = 1 << 20
 
-func NewServer(handler http.Handler, opts ...Option) *Server {
+// newServer is the private core constructor.
+func newServer(handler http.Handler, opts ...ServerOption) *Server {
 	srv := &Server{
 		server: &http.Server{
 			Handler: handler,
@@ -48,7 +47,6 @@ func NewServer(handler http.Handler, opts ...Option) *Server {
 
 	// If no logger was provided by the options, create a default one.
 	if srv.logger == nil {
-		// This default logger writes to standard error, which is a sensible default.
 		srv.logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 
@@ -58,25 +56,24 @@ func NewServer(handler http.Handler, opts ...Option) *Server {
 	return srv
 }
 
-// --- 4. The Options Themselves ---
-// These are the public API for configuring your server.
+// --- Public Options ---
 
 // WithLogger sets a custom logger for the server.
-func WithLogger(logger *slog.Logger) Option {
+func WithLogger(logger *slog.Logger) ServerOption {
 	return func(s *Server) {
 		s.logger = logger
 	}
 }
 
 // WithAddress sets the host and port for the server.
-func WithAddress(host, port string) Option {
+func WithAddress(host, port string) ServerOption {
 	return func(s *Server) {
 		s.server.Addr = host + ":" + port
 	}
 }
 
 // WithTimeouts sets the read, write, and idle timeouts for the server.
-func WithTimeouts(read, write, idle time.Duration) Option {
+func WithTimeouts(read, write, idle time.Duration) ServerOption {
 	return func(s *Server) {
 		s.server.ReadTimeout = read
 		s.server.WriteTimeout = write
@@ -85,7 +82,7 @@ func WithTimeouts(read, write, idle time.Duration) Option {
 }
 
 // WithTLS sets the use of TLS with the given certificate and key files.
-func WithTLS(certFile, keyFile, tlsVersion string) Option {
+func WithTLS(certFile, keyFile, tlsVersion string) ServerOption {
 	return func(s *Server) {
 		// Use a helper to create a secure, modern TLS config
 		s.server.TLSConfig = createTLSConfig(s, tlsVersion)
@@ -94,11 +91,11 @@ func WithTLS(certFile, keyFile, tlsVersion string) Option {
 	}
 }
 
-// NewServerFromConfig creates a new server from a configuration struct.
-// This acts as a bridge between your Viper-based config and the server component.
-func NewServerFromConfig(cfg *Config, handler http.Handler, opts ...Option) *Server {
+// NewServer creates a new server from a configuration struct.
+// This is the primary public entry point for creating an HTTP server.
+func NewServer(cfg *Config, handler http.Handler, opts ...ServerOption) *Server {
 	// Create a slice of options from your config struct
-	configOpts := []Option{
+	configOpts := []ServerOption{
 		WithAddress(cfg.Host, cfg.Port),
 		WithTimeouts(cfg.ReadTimeout, cfg.WriteTimeout, cfg.IdleTimeout),
 	}
@@ -110,8 +107,8 @@ func NewServerFromConfig(cfg *Config, handler http.Handler, opts ...Option) *Ser
 	// Append any additional options passed to this function.
 	allOpts := append(configOpts, opts...)
 
-	// Call the core constructor with the generated options
-	return NewServer(handler, allOpts...)
+	// Call the core private constructor with the generated options
+	return newServer(handler, allOpts...)
 }
 
 // Server get http server instance

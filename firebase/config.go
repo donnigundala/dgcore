@@ -14,8 +14,10 @@ type Config struct {
 func init() {
 	// The user is expected to override these with actual paths or JSON content,
 	// typically via environment variables for security.
-	config.Add("firebase.default", map[string]any{
-		"credentials_file": "",
-		"credentials_json": "",
+	config.Add("firebase", map[string]any{
+		"default": map[string]any{
+			"credentials_file": "",
+			"credentials_json": "",
+		},
 	})
 }

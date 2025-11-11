@@ -17,9 +17,9 @@ type mongoProvider struct {
 	logger *slog.Logger
 }
 
-// NewMongoProvider creates a new MongoDB provider.
+// newMongoProvider creates a new MongoDB provider.
 // It expects the URI to be fully resolved by the config loader (Viper).
-func NewMongoProvider(ctx context.Context, cfg *MongoConfig, policy *PolicyConfig, logger *slog.Logger) (Provider, error) {
+func newMongoProvider(ctx context.Context, cfg *MongoConfig, policy *PolicyConfig, logger *slog.Logger) (Provider, error) {
 	if cfg.URI == "" {
 		return nil, fmt.Errorf("MongoDB URI is missing")
 	}

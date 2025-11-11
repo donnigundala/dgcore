@@ -21,7 +21,7 @@ type TestModel struct {
 // connects to it, and performs basic CRUD operations.
 func TestNewManager_WithSQLite(t *testing.T) {
 	// 1. Define the configuration manually in code (the power of DI for testing).
-	dbManagerConfig := ManagerConfig{
+	dbManagerConfig := Config{
 		DefaultConnection: "my_sqlite",
 		Connections: map[string]Connection{
 			"my_sqlite": {
@@ -85,7 +85,7 @@ func TestNewManager_WithSQLite(t *testing.T) {
 
 // TestNewManager_EmptyConfig tests that the manager can be created with no connections.
 func TestNewManager_EmptyConfig(t *testing.T) {
-	emptyConfig := ManagerConfig{}
+	emptyConfig := Config{}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	dbManager, err := NewManager(emptyConfig, WithLogger(logger))
@@ -100,7 +100,7 @@ func TestNewManager_EmptyConfig(t *testing.T) {
 // TestNewManager_MissingDefault tests that getting the default connection fails
 // when the specified default does not exist.
 func TestNewManager_MissingDefault(t *testing.T) {
-	configWithBadDefault := ManagerConfig{
+	configWithBadDefault := Config{
 		DefaultConnection: "non_existent_default",
 		Connections: map[string]Connection{
 			"my_sqlite": {

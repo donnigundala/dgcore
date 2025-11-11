@@ -25,38 +25,45 @@ type S3ConfigWithAuth struct {
 	BaseURL   string
 }
 
-// register converter and driver
-func init() {
-	RegisterConfigConverter("s3", func(cfg map[string]interface{}) (interface{}, error) {
-		c := S3ConfigWithAuth{}
-		if v, ok := cfg["bucket"].(string); ok {
-			c.Bucket = v
-		}
-		if v, ok := cfg["region"].(string); ok {
-			c.Region = v
-		}
-		if v, ok := cfg["accessKey"].(string); ok {
-			c.AccessKey = v
-		}
-		if v, ok := cfg["secretKey"].(string); ok {
-			c.SecretKey = v
-		}
-		if v, ok := cfg["baseURL"].(string); ok {
-			c.BaseURL = v
-		}
-		if c.Bucket == "" || c.Region == "" {
-			return nil, fmt.Errorf("s3: bucket and region are required")
-		}
-		return c, nil
-	})
-
-	RegisterDriver("s3", func(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
-		cfg, ok := config.(S3ConfigWithAuth)
+// newS3Driver is the constructor for the S3 driver, returning a Storage interface.
+func newS3Driver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+	cfg, ok := config.(S3ConfigWithAuth)
+	if !ok {
+		raw, ok := config.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("invalid config for s3 driver")
+			return nil, fmt.Errorf("invalid config type for s3 driver: %T", config)
 		}
-		return NewS3Driver(cfg, logger, traceIDKey)
-	})
+		converted, err := convertS3Config(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert config for s3 driver: %w", err)
+		}
+		cfg = converted
+	}
+	return newS3DriverInternal(cfg, logger, traceIDKey)
+}
+
+// convertS3Config handles the conversion from a map to S3ConfigWithAuth struct.
+func convertS3Config(cfg map[string]interface{}) (S3ConfigWithAuth, error) {
+	c := S3ConfigWithAuth{}
+	if v, ok := cfg["bucket"].(string); ok {
+		c.Bucket = v
+	}
+	if v, ok := cfg["region"].(string); ok {
+		c.Region = v
+	}
+	if v, ok := cfg["accessKey"].(string); ok {
+		c.AccessKey = v
+	}
+	if v, ok := cfg["secretKey"].(string); ok {
+		c.SecretKey = v
+	}
+	if v, ok := cfg["baseURL"].(string); ok {
+		c.BaseURL = v
+	}
+	if c.Bucket == "" || c.Region == "" {
+		return c, fmt.Errorf("s3: bucket and region are required")
+	}
+	return c, nil
 }
 
 // S3Driver implements the Storage interface for AWS S3.
@@ -67,7 +74,8 @@ type S3Driver struct {
 	traceIDKey any
 }
 
-func NewS3Driver(cfg S3ConfigWithAuth, logger *slog.Logger, traceIDKey any) (*S3Driver, error) {
+// newS3DriverInternal is the internal constructor for S3Driver.
+func newS3DriverInternal(cfg S3ConfigWithAuth, logger *slog.Logger, traceIDKey any) (*S3Driver, error) {
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(cfg.Region),
 	)

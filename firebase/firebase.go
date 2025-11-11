@@ -10,25 +10,25 @@ import (
 	"google.golang.org/api/option"
 )
 
-// Firebase wraps the Firebase app object.
-type Firebase struct {
+// firebaseApp wraps the Firebase app object.
+type firebaseApp struct {
 	App    *firebase.App
 	logger *slog.Logger
 }
 
-// Option defines a functional option for configuring the Firebase instance.
-type Option func(*Firebase)
+// appOption defines a functional option for configuring the Firebase instance.
+type appOption func(*firebaseApp)
 
-// WithLogger sets a custom logger for the Firebase instance.
-func WithLogger(logger *slog.Logger) Option {
-	return func(s *Firebase) {
+// withAppLogger sets a custom logger for the Firebase instance.
+func withAppLogger(logger *slog.Logger) appOption {
+	return func(s *firebaseApp) {
 		s.logger = logger
 	}
 }
 
-// New initializes and returns a new Firebase instance.
-func New(ctx context.Context, cfg *Config, opts ...Option) (*Firebase, error) {
-	fb := &Firebase{}
+// newFirebaseApp initializes and returns a new Firebase instance.
+func newFirebaseApp(ctx context.Context, cfg *Config, opts ...appOption) (*firebaseApp, error) {
+	fb := &firebaseApp{}
 
 	for _, opt := range opts {
 		opt(fb)

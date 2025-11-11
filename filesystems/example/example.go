@@ -27,14 +27,14 @@ func main() {
 	config.Load()
 
 	// 3. Inject the 'filesystems' configuration into a struct.
-	var fsManagerConfig filesystems.ManagerConfig
+	var fsManagerConfig filesystems.Config
 	if err := config.Inject("filesystems", &fsManagerConfig); err != nil {
 		logger.Error("Failed to inject filesystem configuration", "error", err)
 		os.Exit(1)
 	}
 
 	// 4. Create the FileSystem manager by injecting the config struct.
-	fs, err := filesystems.New(fsManagerConfig,
+	fs, err := filesystems.NewManager(fsManagerConfig,
 		filesystems.WithLogger(logger),
 		filesystems.WithTraceIDKey(TraceIDKey),
 	)

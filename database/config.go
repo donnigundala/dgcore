@@ -4,8 +4,8 @@ import "time"
 
 // --- Top Level Config ---
 
-// ManagerConfig is the root configuration for the entire database manager.
-type ManagerConfig struct {
+// Config is the root configuration for the entire database manager.
+type Config struct {
 	DefaultConnection string                `mapstructure:"default_connection"`
 	Connections       map[string]Connection `mapstructure:"connections"`
 }

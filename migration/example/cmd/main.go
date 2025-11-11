@@ -22,7 +22,7 @@ func main() {
 	config.Load()
 
 	// Unmarshal bagian 'databases' dari config ke struct ManagerConfig.
-	var dbManagerConfig database.ManagerConfig
+	var dbManagerConfig database.Config
 	if err := config.Inject("databases", &dbManagerConfig); err != nil {
 		appSlog.Error("Failed to inject database configurations", "error", err)
 		os.Exit(1)

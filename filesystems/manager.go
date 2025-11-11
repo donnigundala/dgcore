@@ -9,77 +9,59 @@ import (
 	"time"
 )
 
-// ManagerConfig holds the configuration for the filesystem manager.
-type ManagerConfig struct {
-	Default string
-	Disks   map[string]Disk
-}
-
-// Disk represents the configuration for a storage disk.
-type Disk struct {
-	Driver string
-	Config map[string]interface{}
-}
-
-// FileSystem is the top-level manager for all storage disks.
-type FileSystem struct {
+// Manager is the top-level manager for all storage disks.
+type Manager struct {
 	disks       map[string]Storage
 	defaultDisk string
 	logger      *slog.Logger
 	traceIDKey  any
 }
 
-// Option configures a FileSystem.
-type Option func(*FileSystem)
+// ManagerOption configures a Manager.
+type ManagerOption func(*Manager)
 
 // WithTraceIDKey provides a context key to look for a trace ID. The value
 // associated with this key should be a string.
-func WithTraceIDKey(key any) Option {
-	return func(fs *FileSystem) {
-		fs.traceIDKey = key
+func WithTraceIDKey(key any) ManagerOption {
+	return func(m *Manager) {
+		m.traceIDKey = key
 	}
 }
 
 // WithLogger provides a slog logger for the filesystem manager.
 // If not provided, logs will be discarded.
-func WithLogger(logger *slog.Logger) Option {
-	return func(fs *FileSystem) {
+func WithLogger(logger *slog.Logger) ManagerOption {
+	return func(m *Manager) {
 		if logger != nil {
-			fs.logger = logger
+			m.logger = logger
 		}
 	}
 }
 
-// New creates a new FileSystem manager from the given configuration.
-func New(config ManagerConfig, opts ...Option) (*FileSystem, error) {
-	fs := &FileSystem{
+// NewManager creates a new Manager from the given configuration.
+func NewManager(config Config, opts ...ManagerOption) (*Manager, error) {
+	m := &Manager{
 		// Default to a silent logger. This can be overridden by the WithLogger option.
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	for _, opt := range opts {
-		opt(fs)
+		opt(m)
 	}
 
 	if len(config.Disks) == 0 {
 		return nil, fmt.Errorf("no disks configured")
 	}
 
-	fs.logger.Debug("Initializing filesystem manager", "default_disk", config.Default, "disk_count", len(config.Disks))
+	m.logger.Debug("Initializing filesystem manager", "default_disk", config.Default, "disk_count", len(config.Disks))
 
 	disks := make(map[string]Storage)
-	factory := NewFactory()
 
 	for name, disk := range config.Disks {
-		driverConfig, err := convertConfig(disk.Driver, disk.Config)
+		// The conversion logic is now handled by the driver's constructor wrapper
+		storageDriver, err := newStorage(disk.Driver, disk.Config, m.logger.With("disk", name, "driver", disk.Driver), m.traceIDKey)
 		if err != nil {
-			fs.logger.Error("Failed to convert config for disk", "disk", name, "driver", disk.Driver, "error", err)
-			return nil, fmt.Errorf("failed to create config for disk '%s': %w", name, err)
-		}
-
-		storageDriver, err := factory.Create(disk.Driver, driverConfig, fs.logger.With("disk", name, "driver", disk.Driver), fs.traceIDKey)
-		if err != nil {
-			fs.logger.Error("Failed to create driver for disk", "disk", name, "driver", disk.Driver, "error", err)
+			m.logger.Error("Failed to create driver for disk", "disk", name, "driver", disk.Driver, "error", err)
 			return nil, fmt.Errorf("failed to create driver for disk '%s': %w", name, err)
 		}
 		disks[name] = storageDriver
@@ -105,29 +87,29 @@ func New(config ManagerConfig, opts ...Option) (*FileSystem, error) {
 		return nil, fmt.Errorf("default disk '%s' not found in configured disks", defaultDisk)
 	}
 
-	fs.disks = disks
-	fs.defaultDisk = defaultDisk
+	m.disks = disks
+	m.defaultDisk = defaultDisk
 
-	fs.logger.Info("Filesystem manager initialized", "default_disk", fs.defaultDisk)
+	m.logger.Info("Filesystem manager initialized", "default_disk", m.defaultDisk)
 
-	return fs, nil
+	return m, nil
 }
 
 // Disk returns a specific storage driver by name. Panics if not configured.
-func (fs *FileSystem) Disk(name string) Storage {
-	disk, ok := fs.disks[name]
+func (m *Manager) Disk(name string) Storage {
+	disk, ok := m.disks[name]
 	if !ok {
-		fs.logger.Error("Requested disk not configured", "disk", name)
+		m.logger.Error("Requested disk not configured", "disk", name)
 		panic(fmt.Sprintf("disk '%s' not configured", name))
 	}
 	return disk
 }
 
 // GetDisk returns the disk and an error if not found (non-panicking).
-func (fs *FileSystem) GetDisk(name string) (Storage, error) {
-	disk, ok := fs.disks[name]
+func (m *Manager) GetDisk(name string) (Storage, error) {
+	disk, ok := m.disks[name]
 	if !ok {
-		fs.logger.Warn("Requested disk not configured", "disk", name)
+		m.logger.Warn("Requested disk not configured", "disk", name)
 		return nil, fmt.Errorf("disk '%s' not configured", name)
 	}
 	return disk, nil
@@ -135,26 +117,26 @@ func (fs *FileSystem) GetDisk(name string) (Storage, error) {
 
 // Default-disk convenience methods
 
-func (fs *FileSystem) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
-	return fs.Disk(fs.defaultDisk).Upload(ctx, key, data, size, visibility)
+func (m *Manager) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
+	return m.Disk(m.defaultDisk).Upload(ctx, key, data, size, visibility)
 }
 
-func (fs *FileSystem) Download(ctx context.Context, key string) (io.ReadCloser, error) {
-	return fs.Disk(fs.defaultDisk).Download(ctx, key)
+func (m *Manager) Download(ctx context.Context, key string) (io.ReadCloser, error) {
+	return m.Disk(m.defaultDisk).Download(ctx, key)
 }
 
-func (fs *FileSystem) Delete(ctx context.Context, key string) error {
-	return fs.Disk(fs.defaultDisk).Delete(ctx, key)
+func (m *Manager) Delete(ctx context.Context, key string) error {
+	return m.Disk(m.defaultDisk).Delete(ctx, key)
 }
 
-func (fs *FileSystem) Exists(ctx context.Context, key string) (bool, error) {
-	return fs.Disk(fs.defaultDisk).Exists(ctx, key)
+func (m *Manager) Exists(ctx context.Context, key string) (bool, error) {
+	return m.Disk(m.defaultDisk).Exists(ctx, key)
 }
 
-func (fs *FileSystem) GetURL(ctx context.Context, key string, visibility Visibility, duration time.Duration) (string, error) {
-	return fs.Disk(fs.defaultDisk).GetURL(ctx, key, visibility, duration)
+func (m *Manager) GetURL(ctx context.Context, key string, visibility Visibility, duration time.Duration) (string, error) {
+	return m.Disk(m.defaultDisk).GetURL(ctx, key, visibility, duration)
 }
 
-func (fs *FileSystem) List(ctx context.Context, prefix string) ([]string, error) {
-	return fs.Disk(fs.defaultDisk).List(ctx, prefix)
+func (m *Manager) List(ctx context.Context, prefix string) ([]string, error) {
+	return m.Disk(m.defaultDisk).List(ctx, prefix)
 }

@@ -23,32 +23,41 @@ type LocalConfig struct {
 	Secret   string
 }
 
-// register converter and driver at package init
-func init() {
-	RegisterConfigConverter("local", func(cfg map[string]interface{}) (interface{}, error) {
-		lc := LocalConfig{}
-		if v, ok := cfg["basePath"].(string); ok {
-			lc.BasePath = v
-		}
-		if v, ok := cfg["baseURL"].(string); ok {
-			lc.BaseURL = v
-		}
-		if v, ok := cfg["secret"].(string); ok {
-			lc.Secret = v
-		}
-		if lc.BasePath == "" {
-			return nil, fmt.Errorf("local: basePath required")
-		}
-		return lc, nil
-	})
-
-	RegisterDriver("local", func(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
-		cfg, ok := config.(LocalConfig)
+// newLocalDriver is the constructor for the local driver, returning a Storage interface.
+func newLocalDriver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+	cfg, ok := config.(LocalConfig)
+	if !ok {
+		// This might happen if the config conversion is incorrect.
+		// We also handle the conversion just in case.
+		raw, ok := config.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("invalid config for local driver")
+			return nil, fmt.Errorf("invalid config type for local driver: %T", config)
 		}
-		return NewLocalDriver(cfg, logger, traceIDKey)
-	})
+		converted, err := convertLocalConfig(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert config for local driver: %w", err)
+		}
+		cfg = converted
+	}
+	return newLocalDriverInternal(cfg, logger, traceIDKey)
+}
+
+// convertLocalConfig handles the conversion from a map to LocalConfig struct.
+func convertLocalConfig(cfg map[string]interface{}) (LocalConfig, error) {
+	lc := LocalConfig{}
+	if v, ok := cfg["basePath"].(string); ok {
+		lc.BasePath = v
+	}
+	if v, ok := cfg["baseURL"].(string); ok {
+		lc.BaseURL = v
+	}
+	if v, ok := cfg["secret"].(string); ok {
+		lc.Secret = v
+	}
+	if lc.BasePath == "" {
+		return lc, fmt.Errorf("local: basePath required")
+	}
+	return lc, nil
 }
 
 // LocalDriver implements Storage using the filesystem.
@@ -58,7 +67,8 @@ type LocalDriver struct {
 	traceIDKey any
 }
 
-func NewLocalDriver(cfg LocalConfig, logger *slog.Logger, traceIDKey any) (*LocalDriver, error) {
+// newLocalDriverInternal is the internal constructor for LocalDriver.
+func newLocalDriverInternal(cfg LocalConfig, logger *slog.Logger, traceIDKey any) (*LocalDriver, error) {
 	if cfg.BasePath == "" {
 		return nil, fmt.Errorf("basePath is required")
 	}
