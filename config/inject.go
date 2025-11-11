@@ -1,7 +1,9 @@
 package config
 
 import (
+	"reflect"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 )
@@ -50,6 +52,9 @@ func Unmarshal(prefix string, target any) error {
 		TagName:          "mapstructure",
 		Result:           target,
 		WeaklyTypedInput: true,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+		),
 	}
 	decoder, err := mapstructure.NewDecoder(decoderCfg)
 	if err != nil {
@@ -98,4 +103,23 @@ func assignNested(dest map[string]any, path string, value any) {
 //	if err := Inject("app", &ac); err != nil { ... }
 func Inject(prefix string, target any) error {
 	return Unmarshal(prefix, target)
+}
+
+// stringToTimeDurationHookFunc returns a DecodeHookFunc that converts
+// strings to time.Duration.
+func stringToTimeDurationHookFunc() mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{}) (interface{}, error) {
+		if f.Kind() != reflect.String {
+			return data, nil
+		}
+		if t != reflect.TypeOf(time.Duration(0)) {
+			return data, nil
+		}
+
+		// Convert it by parsing
+		return time.ParseDuration(data.(string))
+	}
 }
