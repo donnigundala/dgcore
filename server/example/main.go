@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/donnigundala/dgcore/config"
+	"github.com/donnigundala/dgcore/ctxutil"
 	"github.com/donnigundala/dgcore/server"
 )
 
@@ -26,8 +27,10 @@ func main() {
 	// Configuration
 	// =========================================================================
 	// Load configuration from file into the global config store.
-	// Assumes the config file is in a 'config' directory relative to the executable.
-	config.LoadWithPaths("config/server.yaml")
+	if err := config.Load("config/server.yaml"); err != nil {
+		logger.Error("failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Inject the 'server.http' section of the config into a struct.
 	var serverCfg server.Config
@@ -49,9 +52,12 @@ func main() {
 	// =========================================================================
 	mux := http.NewServeMux()
 	mux.Handle("/hello", server.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		log := server.LoggerFromContext(r.Context())
+		// Get the logger from the context using the new ctxutil package.
+		log := ctxutil.LoggerFromContext(r.Context())
 		log.Info("Handling /hello request")
+
 		someOtherFunction(r.Context())
+
 		fmt.Fprintln(w, "Hello, World!")
 		return nil
 	}))
@@ -84,6 +90,7 @@ func main() {
 }
 
 func someOtherFunction(ctx context.Context) {
-	log := server.LoggerFromContext(ctx)
+	// This function also uses the ctxutil helper.
+	log := ctxutil.LoggerFromContext(ctx)
 	log.Info("doing work in another function")
 }
