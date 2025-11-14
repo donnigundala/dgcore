@@ -20,17 +20,17 @@ type Storage interface {
 
 // newStorage acts as an internal factory for creating a Storage provider.
 // It is called by the Manager.
-func newStorage(driver string, config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+func newStorage(driver string, config interface{}, logger *slog.Logger) (Storage, error) {
 	switch driver {
 	case "local":
-		// Assuming newLocalDriver is the constructor for the local driver
-		return newLocalDriver(config, logger, traceIDKey)
+		// The traceIDKey is no longer needed.
+		return newLocalDriver(config, logger)
 	case "s3":
-		// Assuming newS3Driver is the constructor for the s3 driver
-		return newS3Driver(config, logger, traceIDKey)
+		// The traceIDKey is no longer needed.
+		return newS3Driver(config, logger)
 	case "minio":
-		// Assuming newMinioDriver is the constructor for the minio driver
-		return newMinioDriver(config, logger, traceIDKey)
+		// The traceIDKey is no longer needed.
+		return newMinioDriver(config, logger)
 	default:
 		return nil, fmt.Errorf("unsupported filesystem driver: %s", driver)
 	}

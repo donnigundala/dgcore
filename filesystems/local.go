@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/donnigundala/dgcore/ctxutil"
 )
 
 // LocalConfig holds configuration for the local driver.
@@ -24,7 +26,7 @@ type LocalConfig struct {
 }
 
 // newLocalDriver is the constructor for the local driver, returning a Storage interface.
-func newLocalDriver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+func newLocalDriver(config interface{}, logger *slog.Logger) (Storage, error) {
 	cfg, ok := config.(LocalConfig)
 	if !ok {
 		// This might happen if the config conversion is incorrect.
@@ -39,7 +41,7 @@ func newLocalDriver(config interface{}, logger *slog.Logger, traceIDKey any) (St
 		}
 		cfg = converted
 	}
-	return newLocalDriverInternal(cfg, logger, traceIDKey)
+	return newLocalDriverInternal(cfg, logger)
 }
 
 // convertLocalConfig handles the conversion from a map to LocalConfig struct.
@@ -62,13 +64,12 @@ func convertLocalConfig(cfg map[string]interface{}) (LocalConfig, error) {
 
 // LocalDriver implements Storage using the filesystem.
 type LocalDriver struct {
-	cfg        LocalConfig
-	logger     *slog.Logger
-	traceIDKey any
+	cfg    LocalConfig
+	logger *slog.Logger // Base logger for the driver
 }
 
 // newLocalDriverInternal is the internal constructor for LocalDriver.
-func newLocalDriverInternal(cfg LocalConfig, logger *slog.Logger, traceIDKey any) (*LocalDriver, error) {
+func newLocalDriverInternal(cfg LocalConfig, logger *slog.Logger) (*LocalDriver, error) {
 	if cfg.BasePath == "" {
 		return nil, fmt.Errorf("basePath is required")
 	}
@@ -89,17 +90,14 @@ func newLocalDriverInternal(cfg LocalConfig, logger *slog.Logger, traceIDKey any
 		logger.Error("Base path is not a directory", "path", cfg.BasePath)
 		return nil, fmt.Errorf("local: base path is not a directory")
 	}
-	return &LocalDriver{cfg: cfg, logger: logger, traceIDKey: traceIDKey}, nil
+	return &LocalDriver{cfg: cfg, logger: logger}, nil
 }
 
+// loggerFrom retrieves the context-aware logger.
 func (l *LocalDriver) loggerFrom(ctx context.Context) *slog.Logger {
-	logger := l.logger
-	if l.traceIDKey != nil {
-		if traceID, ok := ctx.Value(l.traceIDKey).(string); ok && traceID != "" {
-			logger = logger.With(slog.String("trace_id", traceID))
-		}
-	}
-	return logger
+	// Use the ctxutil helper to get the logger from the context.
+	// This logger will already contain the request_id if present.
+	return ctxutil.LoggerFromContext(ctx)
 }
 
 func (l *LocalDriver) resolvePath(key string, logger *slog.Logger) (string, error) {

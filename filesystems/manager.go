@@ -14,19 +14,10 @@ type Manager struct {
 	disks       map[string]Storage
 	defaultDisk string
 	logger      *slog.Logger
-	traceIDKey  any
 }
 
 // ManagerOption configures a Manager.
 type ManagerOption func(*Manager)
-
-// WithTraceIDKey provides a context key to look for a trace ID. The value
-// associated with this key should be a string.
-func WithTraceIDKey(key any) ManagerOption {
-	return func(m *Manager) {
-		m.traceIDKey = key
-	}
-}
 
 // WithLogger provides a slog logger for the filesystem manager.
 // If not provided, logs will be discarded.
@@ -58,8 +49,8 @@ func NewManager(config Config, opts ...ManagerOption) (*Manager, error) {
 	disks := make(map[string]Storage)
 
 	for name, disk := range config.Disks {
-		// The conversion logic is now handled by the driver's constructor wrapper
-		storageDriver, err := newStorage(disk.Driver, disk.Config, m.logger.With("disk", name, "driver", disk.Driver), m.traceIDKey)
+		// The traceIDKey is no longer passed down.
+		storageDriver, err := newStorage(disk.Driver, disk.Config, m.logger.With("disk", name, "driver", disk.Driver))
 		if err != nil {
 			m.logger.Error("Failed to create driver for disk", "disk", name, "driver", disk.Driver, "error", err)
 			return nil, fmt.Errorf("failed to create driver for disk '%s': %w", name, err)
@@ -67,7 +58,7 @@ func NewManager(config Config, opts ...ManagerOption) (*Manager, error) {
 		disks[name] = storageDriver
 	}
 
-	// If default not provided, choose one deterministically
+	// If default not provided, choose one deterministically.
 	defaultDisk := config.Default
 	if defaultDisk == "" {
 		names := make([]string, 0, len(disks))
@@ -115,7 +106,8 @@ func (m *Manager) GetDisk(name string) (Storage, error) {
 	return disk, nil
 }
 
-// Default-disk convenience methods
+// Default-disk convenience methods. These methods already accept a context,
+// which will be passed down to the underlying storage driver.
 
 func (m *Manager) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
 	return m.Disk(m.defaultDisk).Upload(ctx, key, data, size, visibility)

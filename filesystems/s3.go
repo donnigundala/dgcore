@@ -14,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	"github.com/donnigundala/dgcore/ctxutil"
 )
 
 // S3ConfigWithAuth defines configuration for AWS S3 driver.
@@ -26,7 +28,7 @@ type S3ConfigWithAuth struct {
 }
 
 // newS3Driver is the constructor for the S3 driver, returning a Storage interface.
-func newS3Driver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+func newS3Driver(config interface{}, logger *slog.Logger) (Storage, error) {
 	cfg, ok := config.(S3ConfigWithAuth)
 	if !ok {
 		raw, ok := config.(map[string]interface{})
@@ -39,7 +41,7 @@ func newS3Driver(config interface{}, logger *slog.Logger, traceIDKey any) (Stora
 		}
 		cfg = converted
 	}
-	return newS3DriverInternal(cfg, logger, traceIDKey)
+	return newS3DriverInternal(cfg, logger)
 }
 
 // convertS3Config handles the conversion from a map to S3ConfigWithAuth struct.
@@ -68,14 +70,13 @@ func convertS3Config(cfg map[string]interface{}) (S3ConfigWithAuth, error) {
 
 // S3Driver implements the Storage interface for AWS S3.
 type S3Driver struct {
-	client     *s3.Client
-	cfg        S3ConfigWithAuth
-	logger     *slog.Logger
-	traceIDKey any
+	client *s3.Client
+	cfg    S3ConfigWithAuth
+	logger *slog.Logger // Base logger for the driver
 }
 
 // newS3DriverInternal is the internal constructor for S3Driver.
-func newS3DriverInternal(cfg S3ConfigWithAuth, logger *slog.Logger, traceIDKey any) (*S3Driver, error) {
+func newS3DriverInternal(cfg S3ConfigWithAuth, logger *slog.Logger) (*S3Driver, error) {
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(cfg.Region),
 	)
@@ -84,17 +85,14 @@ func newS3DriverInternal(cfg S3ConfigWithAuth, logger *slog.Logger, traceIDKey a
 	}
 
 	client := s3.NewFromConfig(awsCfg)
-	return &S3Driver{client: client, cfg: cfg, logger: logger, traceIDKey: traceIDKey}, nil
+	return &S3Driver{client: client, cfg: cfg, logger: logger}, nil
 }
 
+// loggerFrom retrieves the context-aware logger.
 func (s *S3Driver) loggerFrom(ctx context.Context) *slog.Logger {
-	logger := s.logger
-	if s.traceIDKey != nil {
-		if traceID, ok := ctx.Value(s.traceIDKey).(string); ok && traceID != "" {
-			logger = logger.With(slog.String("trace_id", traceID))
-		}
-	}
-	return logger
+	// Use the ctxutil helper to get the logger from the context.
+	// This logger will already contain the request_id if present.
+	return ctxutil.LoggerFromContext(ctx)
 }
 
 func (s *S3Driver) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
