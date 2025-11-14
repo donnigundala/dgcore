@@ -2,114 +2,54 @@
 
 ## Overview
 
-The `server` package provides a robust and flexible framework for managing the lifecycle of multiple servers (e.g., HTTP, gRPC) within an application. It introduces a `Manager` that orchestrates the starting, graceful shutdown, and health monitoring of various `Runnable` server instances.
+The `server` package provides a production-grade, robust, and flexible framework for managing the lifecycle of multiple servers (e.g., HTTP, gRPC) within a single application. It is built with modern Go practices, focusing on graceful shutdown, structured logging, and context-aware request handling.
 
-## Features
+## Core Concepts
 
--   **Centralized Server Management**: Start, stop, and manage multiple server types from a single point of control.
--   **Graceful Shutdown**: Implements graceful shutdown for all registered servers, allowing in-flight requests to complete before termination.
--   **Configurable Shutdown Timeout**: Allows setting a custom timeout for the graceful shutdown process.
--   **Structured Logging**: Integrates with `slog` for consistent, structured logging across all server operations.
--   **Extensible**: Designed with the `Runnable` interface, making it easy to integrate any server type (HTTP, gRPC, custom) that implements the interface.
+### 1. The `Manager`
 
-## `Manager` Usage
+The `Manager` is the heart of the package. It orchestrates the startup and graceful shutdown of all registered servers.
 
-The `Manager` is the core component for orchestrating your servers.
+-   **Centralized Control**: Start and stop multiple servers (e.g., a public HTTP API and a private gRPC service) from a single point.
+-   **Graceful Shutdown**: Listens for OS signals (`SIGINT`, `SIGTERM`) and ensures all servers shut down cleanly, allowing in-flight requests to complete.
+-   **Robust Error Handling**: Captures and returns errors from both server startup and shutdown processes.
 
-### Creating a Manager
+### 2. The `Runnable` Interface
 
-You can create a new `Manager` instance and configure it using functional options:
+Any component that can be started and stopped can be managed by the `Manager`, as long as it implements the simple `Runnable` interface:
 
 ```go
-import (
-	"log/slog"
-	"os"
-	"time"
-
-	"github.com/donni/dg-framework/core/server"
-)
-
-func main() {
-    logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-    mgr := server.NewManager(
-        server.WithLogger(logger),
-        server.WithShutdownTimeout(10*time.Second),
-    )
-    // ... register and run servers
+type Runnable interface {
+    Start() error
+    Shutdown(ctx context.Context) error
 }
 ```
 
-### Registering Servers
+This design makes the manager highly extensible. The package provides a built-in `HTTPServer` that implements this interface.
 
-Any server that implements the `server.Runnable` interface can be registered with the `Manager`.
+### 3. Context-Aware Logging & Tracing
 
-```go
-// Assuming httpServer is an instance of a server.Runnable
-mgr.Register("http-public", httpServer)
-```
+For effective debugging and tracing in a production environment, it's crucial to track individual requests. The `server` package provides a middleware for this purpose.
 
-### Running Servers
+-   **`RequestIDMiddleware`**: An `http.Handler` middleware that automatically injects a unique `request_id` into every incoming request's context.
+-   **`LoggerFromContext(ctx)`**: A helper function that retrieves a context-aware `slog.Logger` from the request context. This logger will automatically include the `request_id` in all its log entries.
 
-You can run all enabled servers or specific servers by name. The `RunAll` and `Run` methods are blocking and will manage the server lifecycle, including graceful shutdown upon context cancellation (e.g., from OS signals).
+This allows you to trace the entire lifecycle of a single request across different functions and packages.
 
-```go
-import (
-	"context"
-	"os"
-	"os/signal"
-	"syscall"
-)
+### 4. Centralized Error Handling
 
-func main() {
-    // ... manager setup ...
+To avoid repetitive error-handling boilerplate in your HTTP handlers, the package provides a custom `HandlerFunc` type.
 
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+-   **`server.HandlerFunc`**: A function signature of `func(w http.ResponseWriter, r *http.Request) error`.
+-   **Automatic Error Handling**: When you wrap your handler with `server.HandlerFunc`, any error returned will be automatically caught, logged (with its `request_id`), and a generic `500 Internal Server Error` will be sent to the client.
 
-    // Listen for OS shutdown signals
-    go func() {
-        quit := make(chan os.Signal, 1)
-        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-        <-quit
-        logger.Info("Shutdown signal received")
-        cancel() // Trigger context cancellation
-    }()
+## Full Usage Example
 
-    logger.Info("Starting server manager...")
-    if err := mgr.RunAll(ctx); err != nil {
-        logger.Error("Server manager failed", "error", err)
-        os.Exit(1)
-    }
+The following example demonstrates how all these components work together. It is based on the code in `server/example/main.go`.
 
-    logger.Info("Server manager stopped gracefully.")
-}
-```
+### 1. `config/server.yaml`
 
-## `server/http` Package
-
-### Overview
-
-The `server/http` package provides a production-ready, configurable HTTP server for your application. It is built on Go's standard `net/http` package and enhanced with features for robustness, security, and ease of use.
-
-### Features
-
--   **Graceful Shutdown**: Handles OS signals (`SIGINT`, `SIGTERM`) to shut down cleanly, allowing in-flight requests to complete.
--   **Functional Options Pattern**: Offers a clean, flexible API for programmatic configuration.
--   **Framework-Integrated Configuration**: Seamlessly integrates with the `dgcore/config` package, allowing configuration via YAML files and environment variables.
--   **Secure Defaults**: Enforces modern TLS versions and secure cipher suites when TLS is enabled.
--   **Structured Logging**: Integrates with `slog` for consistent, structured logging.
-
-## Configuration
-
-The server is designed to be configured through your application's central configuration system. The framework automatically registers default values, which you can easily override.
-
-The configuration loading follows this order of precedence (highest to lowest):
-1.  **Environment Variables**
-2.  **`config.yaml` File**
-3.  **Framework Defaults**
-
-### YAML Configuration Example
+First, define your server configuration:
 
 ```yaml
 server:
@@ -118,54 +58,16 @@ server:
     read_timeout: 5s
     write_timeout: 10s
     idle_timeout: 120s
-    # tls:
-    #   enabled: true
-    #   cert_file: "/etc/ssl/certs/server.crt"
-    #   key_file: "/etc/ssl/private/server.key"
-    #   tls_version: "TLS1.3"
 ```
 
-### Environment Variables Example
-
-```bash
-# Timeouts
-export SERVER_HTTP_READ_TIMEOUT="10s"
-export SERVER_HTTP_WRITE_TIMEOUT="15s"
-export SERVER_HTTP_IDLE_TIMEOUT="3m"
-
-# TLS settings
-export SERVER_HTTP_TLS_ENABLED=true
-export SERVER_HTTP_TLS_CERT_FILE="/etc/ssl/certs/server.crt"
-export SERVER_HTTP_TLS_KEY_FILE="/etc/ssl/private/server.key"
-export SERVER_HTTP_TLS_TLS_VERSION="TLS1.3"
-```
-
-### Default Values
-
-If no overrides are provided, the server will use these sensible defaults:
-
-| Key               | Default   |
-| :---------------- | :-------- |
-| `addr`            | `:8080`   |
-| `read_timeout`    | `5s`      |
-| `write_timeout`   | `10s`     |
-| `idle_timeout`    | `120s`    |
-| `tls.enabled`     | `false`   |
-| `tls.cert_file`   | `""`      |
-| `tls.key_file`    | `""`      |
-| `tls.tls_version` | `TLS1.2`  |
-
-## Usage Example
-
-The `core/server/example/example.go` file provides a complete, runnable example of how to bootstrap and run an HTTP server using the `Manager`.
+### 2. `main.go`
 
 ```go
-// See core/server/example/example.go for the full implementation.
-
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -174,80 +76,68 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/donni/dg-framework/core/config"
-	"github.com/donni/dg-framework/core/server"
-	"github.com/donni/dg-framework/core/server/http/handler"
+	"github.com/donnigundala/dgcore/config"
+	"github.com/donnigundala/dgcore/server"
 )
 
-type AppConfig struct {
-	Server struct {
-		HTTP server.Config `yaml:"http"`
-	} `yaml:"server"`
-}
-
 func main() {
-	// =========================================================================
-	// Configuration
-	// =========================================================================
-	var appCfg AppConfig
-	if err := config.Load("config/server.yaml", &appCfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+	// 1. Initialize a global logger
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
+	// 2. Load configuration from file
+	if err := config.Load("config/server.yaml"); err != nil {
+		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 
-	// =========================================================================
-	// Logger
-	// =========================================================================
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	// 3. Inject the 'server.http' section into a struct
+	var serverCfg server.Config
+	if err := config.Inject("server.http", &serverCfg); err != nil {
+		logger.Error("failed to inject server configuration", "error", err)
+		os.Exit(1)
+	}
 
-	// =========================================================================
-	// Server Manager
-	// =========================================================================
+	// 4. Create a server Manager
 	mgr := server.NewManager(
 		server.WithLogger(logger),
-		server.WithShutdownTimeout(10*time.Second),
+		server.WithShutdownTimeout(20*time.Second),
 	)
 
-	// =========================================================================
-	// HTTP Server
-	// =========================================================================
-	// Create a simple router
+	// 5. Define handlers and wrap them with middleware
 	mux := http.NewServeMux()
-	mux.Handle("/hello", handler.Wrapper(func(w http.ResponseWriter, r *http.Request) error {
+	mux.Handle("/hello", server.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		// Get the logger from the context to include the request_id
+		log := server.LoggerFromContext(r.Context())
+		log.Info("Handling /hello request")
+		
+		// You can return errors directly
+		if r.URL.Query().Get("fail") == "true" {
+			return errors.New("a simulated error occurred")
+		}
+		
 		fmt.Fprintln(w, "Hello, World!")
 		return nil
 	}))
 
-	// Create the HTTP server using the config
-	httpServer := server.NewHTTPServer(
-		appCfg.Server.HTTP,
-		server.WithHTTPHandler(mux),
-	)
+	// Wrap the main router with the RequestIDMiddleware
+	var httpHandler http.Handler = mux
+	httpHandler = server.RequestIDMiddleware(httpHandler)
 
-	// Register the server with the manager
+	// 6. Create and register the HTTP server
+	httpServer := server.NewHTTPServer(serverCfg, httpHandler)
 	mgr.Register("http-public", httpServer)
 
-	// =========================================================================
-	// Start Servers
-	// =========================================================================
-	ctx, cancel := context.WithCancel(context.Background())
+	// 7. Start the application and wait for a shutdown signal
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Listen for shutdown signals
-	go func() {
-		quit := make(chan os.Signal, 1)
-		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-		<-quit
-		logger.Info("Shutdown signal received")
-		cancel()
-	}()
-
-	logger.Info("Starting server manager...")
-	if err := mgr.RunAll(ctx); err != nil {
-		logger.Error("Server manager failed", "error", err)
+	logger.Info("starting server manager")
+	if err := mgr.RunAll(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("server manager failed", "error", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Server manager stopped gracefully.")
+	logger.Info("server manager stopped gracefully")
 }
 ```

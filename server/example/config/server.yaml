@@ -1,0 +1,11 @@
+server:
+  http:
+    addr: ":8080"
+    read_timeout: 5s
+    write_timeout: 10s
+    idle_timeout: 120s
+    tls:
+      enabled: false
+      # cert_file: "path/to/cert.pem" # Buka komentar dan sediakan path untuk TLS
+      # key_file: "path/to/key.pem"   # Buka komentar dan sediakan path untuk TLS
+      # tls_version: "TLS1.3"         # Opsional: "TLS1.2" atau "TLS1.3"

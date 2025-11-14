@@ -153,10 +153,10 @@ func (m *Manager) runServers(ctx context.Context, names ...string) error {
 	select {
 	case <-ctx.Done():
 		m.logger.Info("shutdown signal received, initiating graceful shutdown")
-		runErr = ctx.Err() // Capture context cancellation error (e.g., Canceled, DeadlineExceeded)
+		runErr = ctx.Err() // Capture context cancellation error (e.g., Canceled, DeadlineExceeded).
 	case err := <-errCh:
 		m.logger.Error("a server failed, initiating shutdown", "error", err)
-		runErr = err // Capture the first server error
+		runErr = err // Capture the first server error.
 	}
 
 	// Create a context for the shutdown process with the configured timeout.

@@ -17,12 +17,12 @@ type HTTPServer struct {
 	logger *slog.Logger
 }
 
-// HTTP_ServerOption configures an HTTPServer.
-type HTTP_ServerOption func(*HTTPServer)
+// HTTPServerOption configures an HTTPServer.
+type HTTPServerOption func(*HTTPServer)
 
 // NewHTTPServer creates a new HTTPServer.
 // The handler is the root HTTP handler for the server (e.g., a router).
-func NewHTTPServer(cfg Config, handler http.Handler, opts ...HTTP_ServerOption) *HTTPServer {
+func NewHTTPServer(cfg Config, handler http.Handler, opts ...HTTPServerOption) *HTTPServer {
 	httpServer := &http.Server{
 		Addr:         cfg.Addr,
 		Handler:      handler,
@@ -50,7 +50,7 @@ func NewHTTPServer(cfg Config, handler http.Handler, opts ...HTTP_ServerOption) 
 		tlsConfig, err := createTLSConfig(cfg.TLS.CertFile, cfg.TLS.KeyFile, cfg.TLS.TLSVersion)
 		if err != nil {
 			srv.logger.Error("failed to create TLS config", "error", err)
-			// Depending on policy, you might want to panic here.
+			// Depending on the policy, you might want to panic here.
 			// For now, we'll proceed without TLS.
 		} else {
 			srv.server.TLSConfig = tlsConfig
@@ -61,14 +61,14 @@ func NewHTTPServer(cfg Config, handler http.Handler, opts ...HTTP_ServerOption) 
 }
 
 // WithHTTPLogger sets a custom logger for the HTTP server.
-func WithHTTPLogger(logger *slog.Logger) HTTP_ServerOption {
+func WithHTTPLogger(logger *slog.Logger) HTTPServerOption {
 	return func(s *HTTPServer) {
 		s.logger = logger
 	}
 }
 
 // WithHTTPHandler sets the HTTP handler for the server.
-func WithHTTPHandler(handler http.Handler) HTTP_ServerOption {
+func WithHTTPHandler(handler http.Handler) HTTPServerOption {
 	return func(s *HTTPServer) {
 		s.server.Handler = handler
 	}
@@ -78,7 +78,7 @@ func WithHTTPHandler(handler http.Handler) HTTP_ServerOption {
 func (s *HTTPServer) Start() error {
 	if s.server.TLSConfig != nil {
 		s.logger.Info("starting HTTPS server")
-		// Cert and key files are now part of the TLSConfig setup.
+		// Cert and key files are now loaded via the TLSConfig.
 		return s.server.ListenAndServeTLS("", "")
 	}
 	s.logger.Info("starting HTTP server")

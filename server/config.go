@@ -2,7 +2,7 @@ package server
 
 import "time"
 
-// Config holds all configuration for the HTTP server.
+// Config holds all configuration for an HTTP server.
 type Config struct {
 	Addr         string        `yaml:"addr"`
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
