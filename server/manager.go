@@ -4,18 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog" // Add this import
+	"log/slog"
 	"net/http"
-	"os" // Add this import for the default logger
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
 
-// Runnable defines a common interface for HTTP/gRPC servers.
+// Runnable defines a common interface for servers that can be started and stopped.
 type Runnable interface {
 	Start() error
-	Close() error
-	Addr() string
 	Shutdown(ctx context.Context) error
 }
 
@@ -26,7 +25,7 @@ type registry struct {
 	Runner  Runnable
 }
 
-// Manager controls lifecycle of multiple servers.
+// Manager controls the lifecycle of multiple servers.
 type Manager struct {
 	mu              sync.RWMutex
 	servers         map[string]*registry
@@ -40,20 +39,21 @@ type ManagerOption func(*Manager)
 // NewManager creates a new server manager.
 func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
-		servers: make(map[string]*registry),
+		servers:         make(map[string]*registry),
+		shutdownTimeout: 15 * time.Second, // A sensible default shutdown timeout.
 	}
 
 	for _, opt := range opts {
 		opt(m)
 	}
 
-	// If no logger was provided, set a sensible default.
+	// If no logger was provided, create a default one.
 	if m.logger == nil {
 		m.logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 
 	// Create a sub-logger that automatically adds the "component" field.
-	m.logger = m.logger.With("component", "server manager")
+	m.logger = m.logger.With("component", "server-manager")
 	return m
 }
 
@@ -71,10 +71,15 @@ func WithShutdownTimeout(d time.Duration) ManagerOption {
 	}
 }
 
-// Register adds a named server.
+// Register adds a named server to the manager.
 func (m *Manager) Register(name string, server Runnable) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if _, exists := m.servers[name]; exists {
+		m.logger.Warn("server with the same name already registered", "name", name)
+		return
+	}
 
 	m.servers[name] = &registry{
 		Name:    name,
@@ -85,7 +90,7 @@ func (m *Manager) Register(name string, server Runnable) {
 
 // Enable marks a server as active.
 func (m *Manager) Enable(name string) error {
-	m.mu.Lock() // Use a write lock as you're modifying a field
+	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	srv, ok := m.servers[name]
@@ -98,8 +103,9 @@ func (m *Manager) Enable(name string) error {
 
 // Disable marks a server as inactive.
 func (m *Manager) Disable(name string) error {
-	m.mu.Lock() // Use a write lock as you're modifying a field
+	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	srv, ok := m.servers[name]
 	if !ok {
 		return fmt.Errorf("server %q not found", name)
@@ -108,125 +114,111 @@ func (m *Manager) Disable(name string) error {
 	return nil
 }
 
-// RunAll starts all enabled servers concurrently and blocks until the context is canceled or an error occurs.
+// RunAll starts all enabled servers concurrently and blocks until the context is canceled or a server fails.
 func (m *Manager) RunAll(ctx context.Context) error {
-	var servers []string
-	for name, srv := range m.servers {
-		if srv.Enabled {
-			servers = append(servers, name)
-		}
-	}
-
-	err := m.runServers(ctx, servers...)
-	if err != nil {
-		return fmt.Errorf("error running servers: %w", err)
-	}
-	return nil
+	return m.runServers(ctx)
 }
 
-// Run runs specific servers by name.
+// Run starts specific servers by name.
 func (m *Manager) Run(ctx context.Context, names ...string) error {
-	err := m.runServers(ctx, names...)
-	if err != nil {
-		return fmt.Errorf("error running servers: %w", err)
-	}
-	return nil
+	return m.runServers(ctx, names...)
 }
 
 // runServers is the internal orchestration logic.
 func (m *Manager) runServers(ctx context.Context, names ...string) error {
-	targets := m.selectServers(names...)
+	targets, targetNames := m.selectServers(names...)
 	if len(targets) == 0 {
-		return fmt.Errorf("no servers selected to run")
+		return errors.New("no servers selected to run")
 	}
+
+	m.logger.Info("starting servers", "servers", strings.Join(targetNames, ", "))
 
 	wg := &sync.WaitGroup{}
 	errCh := make(chan error, len(targets))
 
+	// Start all target servers in separate goroutines.
 	for _, srv := range targets {
 		wg.Add(1)
 		go func(s *registry) {
 			defer wg.Done()
-			m.logger.Info("Starting server", "name", s.Name)
-			if err := s.Runner.Start(); err != nil {
-				if !errors.Is(err, http.ErrServerClosed) {
-					errCh <- fmt.Errorf("%s: %w", s.Name, err)
-				}
+			m.logger.Info("server started", "name", s.Name)
+			if err := s.Runner.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("server %q failed: %w", s.Name, err)
 			}
 		}(srv)
 	}
 
-	var firstErr error
-
-	// Wait for cancellation or error
+	var runErr error
+	// Wait for a shutdown signal (context cancellation) or a server error.
 	select {
 	case <-ctx.Done():
-		m.logger.Info("Shutdown signal received, initiating shutdown...")
+		m.logger.Info("shutdown signal received, initiating graceful shutdown")
+		runErr = ctx.Err() // Capture context cancellation error (e.g., Canceled, DeadlineExceeded)
 	case err := <-errCh:
-		firstErr = err
-		m.logger.Error("Server error", "error", err)
+		m.logger.Error("a server failed, initiating shutdown", "error", err)
+		runErr = err // Capture the first server error
 	}
 
-	// Use the configured timeout, with a fallback.
-	timeout := m.shutdownTimeout
-	if timeout == 0 {
-		timeout = 10 * time.Second // A sensible default
-	}
-
-	// Graceful shutdown for all *actually started* servers
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	// Create a context for the shutdown process with the configured timeout.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), m.shutdownTimeout)
 	defer cancel()
 
-	shutdownWg := &sync.WaitGroup{}
+	// Initiate shutdown for all running servers.
+	m.logger.Info("shutting down servers", "timeout", m.shutdownTimeout.String())
+	shutdownErrCh := make(chan error, len(targets))
 	for _, srv := range targets {
-		shutdownWg.Add(1)
 		go func(s *registry) {
-			defer shutdownWg.Done()
-			m.logger.Info("Shutting down server", "name", s.Name)
 			if err := s.Runner.Shutdown(shutdownCtx); err != nil {
-				// This is a reasonable place to just log shutdown errors
-				m.logger.Error("Error during server shutdown", "name", s.Name, "error", err)
+				shutdownErrCh <- fmt.Errorf("shutdown failed for server %q: %w", s.Name, err)
 			}
 		}(srv)
 	}
-	// Wait for all shutdowns to complete
-	shutdownWg.Wait()
 
-	// Wait for all server goroutines to complete. This is crucial to prevent leaks.
+	// Wait for all server-starting goroutines to finish.
 	wg.Wait()
+	close(errCh)
+	close(shutdownErrCh)
 
-	// Return the captured error.
-	if firstErr != nil {
-		return firstErr
+	// Collect all shutdown errors.
+	var shutdownErrs []error
+	for err := range shutdownErrCh {
+		m.logger.Error("error during server shutdown", "error", err)
+		shutdownErrs = append(shutdownErrs, err)
 	}
 
-	m.logger.Info("All servers stopped gracefully.")
-	return nil
+	// Return the initial error that triggered the shutdown, combined with any shutdown errors.
+	return errors.Join(runErr, errors.Join(shutdownErrs...))
 }
 
-// Helper: filter servers
-func (m *Manager) selectServers(names ...string) []*registry {
+// selectServers filters servers based on the provided names.
+// If no names are provided, it returns all enabled servers.
+func (m *Manager) selectServers(names ...string) ([]*registry, []string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// if no name provided, run all enabled servers
+	var targets []*registry
+	var targetNames []string
+
+	// If no names are provided, select all enabled servers.
 	if len(names) == 0 {
-		targets := make([]*registry, 0, len(m.servers))
 		for _, srv := range m.servers {
 			if srv.Enabled {
 				targets = append(targets, srv)
+				targetNames = append(targetNames, srv.Name)
 			}
 		}
-		return targets
+		return targets, targetNames
 	}
 
-	// run specific servers by name
-	targets := make([]*registry, 0, len(names))
+	// Otherwise, select specific servers by name.
 	for _, n := range names {
 		if srv, ok := m.servers[n]; ok && srv.Enabled {
 			targets = append(targets, srv)
+			targetNames = append(targetNames, srv.Name)
+		} else {
+			m.logger.Warn("server not found or disabled, skipping", "name", n)
 		}
 	}
 
-	return targets
+	return targets, targetNames
 }
