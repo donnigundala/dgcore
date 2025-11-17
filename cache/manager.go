@@ -19,6 +19,7 @@ type Manager struct {
 type ManagerOption func(*Manager)
 
 // WithLogger provides a slog logger for the cache manager.
+// If not provided, a default logger will be used.
 func WithLogger(logger *slog.Logger) ManagerOption {
 	return func(m *Manager) {
 		if logger != nil {
