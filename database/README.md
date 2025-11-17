@@ -1,83 +1,70 @@
-# `core/database` Package
+# `database` Package
 
 ## Overview
 
-The `database` package provides a robust, production-grade framework for managing database connections in Go applications. It is built on a modern, Dependency-Injection-friendly architecture that is consistent across the `dg-framework`.
+The `database` package provides a robust, production-grade framework for managing database connections. It is built on a modern, dependency-injection-friendly architecture that emphasizes context-awareness for superior performance and traceability.
 
-The package offers a unified interface for multiple database backends, with built-in support for high availability, read/write splitting (for SQL), and advanced configuration through simple YAML files.
+The package offers a unified interface for multiple database backends, with built-in support for SQL (via GORM) and MongoDB.
 
-## Features
+## Core Concepts
 
-- **Dependency Injection (DI) Architecture**: Decoupled from global state. The `DatabaseManager` is created by injecting a configuration struct, making it highly testable and easy to integrate.
-- **Unified Configuration**: Configure all database connections (Postgres, MySQL, SQLite, MongoDB) in a clean, structured YAML file. The library automatically handles overrides from environment variables.
-- **High Availability & Read/Write Splitting (SQL)**: Automatically routes write operations to the primary node and read operations across replicas. (Note: Failover logic may need to be managed by the application or a higher-level component).
-- **Advanced Connection Pooling**: Provides granular control over connection pool settings for each database.
-- **Secure by Default**: Encourages loading sensitive credentials (passwords, URIs) from environment variables, which automatically override values in YAML files.
-- **Structured Logging**: Integrates with Go's `log/slog` for structured, machine-readable logs.
-- **Modular Providers**: Easily extensible to support new database types. Comes with built-in providers for SQL (via GORM) and MongoDB.
+### 1. The `Manager`
 
-## Configuration
+The `Manager` is the central component that handles the lifecycle of all named database connections. It is initialized from your application's configuration and provides a single point of access to all database providers.
 
-Configuration is handled via YAML files (e.g., `config/database.yaml`) loaded by your application's central configuration engine. The library defines clear Go structs (`database.ManagerConfig`) that you unmarshal your configuration into.
+### 2. The `Provider` Interface
 
-**The framework's configuration loader (Viper) automatically overrides YAML values with environment variables.** The environment variable name is constructed from the YAML path, in uppercase, with `.` replaced by `_`.
+All database drivers (SQL, MongoDB, etc.) implement a common `Provider` interface. This allows for consistent handling of different database systems. The package also provides extended interfaces like `SQLProvider` and `MongoProvider` for driver-specific functionality.
 
-**Example:** The YAML key `connections.my_postgres.sql.primary.password` is overridden by the environment variable `DATABASES_CONNECTIONS_MY_POSTGRES_SQL_PRIMARY_PASSWORD`.
+### 3. Context-Aware Operations
 
-### Example `database.yaml`
+This is the most critical feature of the package. **All database operations should be performed with a `context.Context`**.
+
+-   **Performance & Reliability**: Passing a context to database operations allows for graceful cancellation. If a user's request is canceled, any long-running database query associated with it will also be stopped, saving valuable database resources.
+-   **End-to-End Tracing**: The database drivers are fully integrated with the `ctxutil` package. When you perform a database operation, the driver will use `ctxutil.LoggerFromContext(ctx)` to get a logger that includes the `request_id`. This enables you to trace a request from the HTTP server all the way down to the specific SQL query or MongoDB command that was executed.
+
+#### For SQL (GORM):
+
+The `SQLProvider` interface provides a special method:
+
+-   **`GormWithContext(ctx context.Context) *gorm.DB`**: This is the **recommended** way to perform database operations. It returns a new GORM session that is bound to the request's context, ensuring all operations are traceable and cancellable.
+
+## Full Usage Example
+
+The following example demonstrates how to configure and use the database manager and its providers in a context-aware manner.
+
+### 1. `config/app.yaml`
+
+Define your database connections in your application's configuration file.
 
 ```yaml
-# your-app/config/database.yaml
-
-# The top-level key 'databases' is used to inject the config.
 databases:
-  # Set the default connection to be used when no name is specified.
-  default_connection: "my_sqlite"
-
-  # Define all your database connections here.
+  default_connection: "mysql_primary"
   connections:
-    # --- SQLite Example ---
-    my_sqlite:
+    mysql_primary:
       driver: "sql"
       sql:
-        driver_name: "sqlite"
+        driver_name: "mysql"
         primary:
-          db_name: "example.db"
-        log_level: "info"
-
-    # --- PostgreSQL Example ---
-    my_postgres:
-      driver: "sql"
-      policy:
-        ping_interval: "15s"
-      sql:
-        driver_name: "postgres"
-        primary:
-          host: "localhost"
-          port: "5432"
-          user: "postgres"
-          password: "password" # Default, overridden by env var in production
+          host: "127.0.0.1"
+          port: "3306"
+          user: "root"
+          password: ${DB_PASSWORD} # Loaded from environment
           db_name: "my_app"
-        pool:
-          max_open_conns: 20
-        log_level: "warn"
-
-    # --- MongoDB Example ---
-    my_mongo:
-      driver: "mongo"
-      policy:
-        ping_interval: "20s"
-      mongo:
-        uri: "mongodb://localhost:27017" # Default, overridden by env var in production
-        database: "my_mongo_db"
-        pool:
-          max_pool_size: 50
         log_level: "info"
+        pool:
+          max_open_conns: 25
+          max_idle_conns: 5
+          conn_max_lifetime: "1h"
+    
+    mongo_main:
+      driver: "mongo"
+      mongo:
+        uri: ${MONGO_URI} # Loaded from environment
+        database: "my_mongo_db"
 ```
 
-## Usage
-
-The idiomatic workflow involves loading configuration into a struct and injecting it into the `DatabaseManager` constructor.
+### 2. `main.go` (or your application's entrypoint)
 
 ```go
 package main
@@ -89,78 +76,72 @@ import (
 
 	"github.com/donnigundala/dgcore/config"
 	"github.com/donnigundala/dgcore/database"
+	"github.com/donnigundala/dgcore/ctxutil"
 	"gorm.io/gorm"
 )
 
-// Example User model
 type User struct {
 	gorm.Model
 	Name string
 }
 
 func main() {
-	// 1. Initialize Application Logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	// 1. Bootstrap logger and load configuration
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// 2. Load Configuration
-	// Assumes a loader that reads all .yaml files from ./config and handles env vars.
-	config.Load()
-
-	// 3. Inject Configuration into Struct
-	// Unmarshal the 'databases' section from the loaded config into our struct.
-	var dbManagerConfig database.ManagerConfig
-	if err := config.Inject("databases", &dbManagerConfig); err != nil {
-		slog.Error("Failed to inject database configuration", "error", err)
+	if err := config.Load("config/app.yaml"); err != nil {
+		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 
-	// 4. Create the DatabaseManager with Dependency Injection
-	dbManager, err := database.NewManager(dbManagerConfig, database.WithLogger(logger))
+	// 2. Inject the database configurations into a struct
+	var dbConfig database.Config
+	if err := config.Inject("databases", &dbConfig); err != nil {
+		logger.Error("failed to inject database configuration", "error", err)
+		os.Exit(1)
+	}
+
+	// 3. Initialize the Database Manager
+	dbManager, err := database.NewManager(dbConfig, database.WithLogger(logger))
 	if err != nil {
-		slog.Error("Failed to create database manager", "error", err)
+		logger.Error("failed to initialize database manager", "error", err)
 		os.Exit(1)
 	}
 	defer dbManager.Close()
 
-	slog.Info("Database manager initialized successfully.")
-
-	// 5. Get and Use a Database Connection
-	// Get the default connection as specified in the YAML.
-	db, err := dbManager.Connection()
+	// 4. Get the default database connection
+	dbProvider, err := dbManager.Connection() // Gets "mysql_primary"
 	if err != nil {
-		slog.Error("Failed to get default database connection", "error", err)
+		logger.Error("failed to get default database connection", "error", err)
 		os.Exit(1)
 	}
 
-	// We need to type-assert the provider to get the specific GORM instance.
-	sqlDB, ok := db.(database.SQLProvider)
+	// 5. Type-assert to the specific provider interface
+	sqlProvider, ok := dbProvider.(database.SQLProvider)
 	if !ok {
-		slog.Error("Default database is not a SQL provider")
+		logger.Error("default database is not a SQL provider")
 		os.Exit(1)
 	}
-	gormDB := sqlDB.Gorm().(*gorm.DB)
 
-	// 6. Perform Operations
-	slog.Info("--- Performing DB Operations ---")
+	// --- Performing Operations ---
+	// Create a sample context, similar to what the server middleware would do.
+	ctx := context.Background()
+	ctx = ctxutil.WithLogger(ctx, logger.With("request_id", "xyz-789"))
+
+	// 6. Get a context-aware GORM instance
+	gormDB := sqlProvider.GormWithContext(ctx)
+
+	// 7. Perform operations using the context-aware instance
 	if err := gormDB.AutoMigrate(&User{}); err != nil {
-		slog.Warn("Could not migrate User model", "error", err)
+		ctxutil.LoggerFromContext(ctx).Warn("Could not migrate User model", "error", err)
 	}
 
-	// Write
-	newUser := User{Name: "Framework User"}
+	newUser := User{Name: "Context-Aware User"}
 	if err := gormDB.Create(&newUser).Error; err != nil {
-		slog.Error("Failed to create user", "error", err)
+		ctxutil.LoggerFromContext(ctx).Error("Failed to create user", "error", err)
 	} else {
-		slog.Info("Created user", "name", newUser.Name, "id", newUser.ID)
-	}
-
-	// Read
-	var fetchedUser User
-	if err := gormDB.First(&fetchedUser, newUser.ID).Error; err != nil {
-		slog.Error("Failed to read user", "error", err)
-	} else {
-		slog.Info("Fetched user", "name", fetchedUser.Name, "id", fetchedUser.ID)
+		ctxutil.LoggerFromContext(ctx).Info("Created user", "name", newUser.Name, "id", newUser.ID)
 	}
 }
 ```

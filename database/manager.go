@@ -48,6 +48,7 @@ func NewManager(cfg Config, opts ...ManagerOption) (*Manager, error) {
 	m.logger.Info("Initializing database manager...", "connection_count", len(cfg.Connections))
 
 	for name, connCfg := range cfg.Connections {
+		// Use a background context for initialization.
 		provider, err := newProvider(context.Background(), name, connCfg, m.logger)
 		if err != nil {
 			m.logger.Error("Failed to connect to database", "connection", name, "error", err)

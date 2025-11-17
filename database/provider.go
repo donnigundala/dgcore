@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"gorm.io/gorm"
 )
 
 // Provider defines the common interface for all database connections.
@@ -20,18 +21,23 @@ type Provider interface {
 }
 
 // SQLProvider extends the base Provider with methods specific to SQL databases,
-// typically those provided by GORM.
+// typically those provided by a library like GORM.
 type SQLProvider interface {
 	Provider
 	// Gorm returns the underlying GORM DB instance for complex queries.
-	Gorm() interface{} // Returning interface{} to avoid direct GORM dependency here.
+	// DEPRECATED: This method is not context-aware. Use GormWithContext instead.
+	Gorm() interface{}
+	// GormWithContext returns a new GORM session bound to the provided context.
+	GormWithContext(ctx context.Context) *gorm.DB
 }
 
 // MongoProvider extends the base Provider with methods specific to MongoDB.
 type MongoProvider interface {
 	Provider
 	// Client returns the underlying MongoDB client instance.
-	Client() interface{} // Returning interface{} to avoid direct Mongo driver dependency here.
+	// It returns interface{} to avoid a direct Mongo driver dependency in this package.
+	Client() interface{}
+	// Database returns the specific mongo.Database instance for this connection.
 	Database() *mongo.Database
 }
 

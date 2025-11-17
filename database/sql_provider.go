@@ -12,6 +12,8 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 	"gorm.io/plugin/dbresolver"
+
+	"github.com/donnigundala/dgcore/ctxutil"
 )
 
 // sqlProvider implements the SQLProvider interface using GORM.
@@ -39,7 +41,7 @@ func newSQLProvider(ctx context.Context, cfg *SQLConfig, policy *PolicyConfig, l
 		return nil, fmt.Errorf("unsupported SQL driver: %s", cfg.DriverName)
 	}
 
-	// Configure GORM logger
+	// Configure GORM logger to use our slog-based logger.
 	gormLogLevel := gormlogger.Warn // Default level
 	if level, ok := gormLogMapping[cfg.LogLevel]; ok {
 		gormLogLevel = level
@@ -102,6 +104,7 @@ func newSQLProvider(ctx context.Context, cfg *SQLConfig, policy *PolicyConfig, l
 		logger: logger,
 	}
 
+	// Ping the database to ensure the connection is valid.
 	if err := provider.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("initial database ping failed: %w", err)
 	}
@@ -110,7 +113,11 @@ func newSQLProvider(ctx context.Context, cfg *SQLConfig, policy *PolicyConfig, l
 	return provider, nil
 }
 
+// Ping verifies the database connection is alive.
 func (p *sqlProvider) Ping(ctx context.Context) error {
+	log := ctxutil.LoggerFromContext(ctx)
+	log.Debug("Pinging SQL database")
+
 	sqlDB, err := p.db.DB()
 	if err != nil {
 		return err
@@ -118,6 +125,7 @@ func (p *sqlProvider) Ping(ctx context.Context) error {
 	return sqlDB.PingContext(ctx)
 }
 
+// Close gracefully terminates the database connection.
 func (p *sqlProvider) Close() error {
 	p.logger.Info("Closing SQL database connection...")
 	sqlDB, err := p.db.DB()
@@ -127,15 +135,24 @@ func (p *sqlProvider) Close() error {
 	return sqlDB.Close()
 }
 
+// Gorm returns the underlying GORM DB instance.
+// IMPORTANT: This method is now DEPRECATED in favor of GormWithContext.
+// It returns a session that is not context-aware.
 func (p *sqlProvider) Gorm() interface{} {
 	return p.db
 }
 
+// GormWithContext returns a new GORM session that is bound to the provided context.
+// This is the recommended way to get a GORM instance for database operations,
+// as it ensures that logging, tracing, and cancellation are correctly propagated.
+func (p *sqlProvider) GormWithContext(ctx context.Context) *gorm.DB {
+	// Use WithContext to create a new session that carries the context.
+	// GORM's logger will use this context to extract request-specific values.
+	return p.db.WithContext(ctx)
+}
+
 // buildDSN constructs the Data Source Name from the config.
-// It no longer resolves env vars itself; that is handled by Viper.
 func buildDSN(node *NodeConfig, driverName string) string {
-	// DSN logic can be more complex, for now, we build from parts.
-	// A DSN field in NodeConfig could override this.
 	p := node
 	switch driverName {
 	case "postgres", "pgx":
@@ -151,6 +168,7 @@ func buildDSN(node *NodeConfig, driverName string) string {
 	}
 }
 
+// gormLogMapping maps our log level strings to GORM's log levels.
 var gormLogMapping = map[string]gormlogger.LogLevel{
 	"silent": gormlogger.Silent,
 	"error":  gormlogger.Error,
