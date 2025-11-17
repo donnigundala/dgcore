@@ -1,73 +1,127 @@
 package config
 
 import (
+	"fmt"
+	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/viper"
 )
 
-// Config is an instance-based configuration manager.
+// Config is an instance-based configuration manager, providing an isolated config environment.
+// This is useful for testing or for applications that need to manage multiple, separate configurations.
 type Config struct {
-	mu       sync.RWMutex
-	v        *viper.Viper
-	registry map[string]any
+	mu sync.RWMutex
+	v  *viper.Viper
 }
 
-// New creates a new config instance.
+// New creates a new, isolated config instance.
 func New() *Config {
+	v := viper.New()
+	// Configure viper instance for consistency with the global one.
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
 	return &Config{
-		v:        viper.New(),
-		registry: make(map[string]any),
+		v: v,
 	}
 }
 
-// Load loads YAML or env config files into this instance.
+// Load loads YAML configuration files from the specified paths into this instance.
+// If no paths are provided, it uses default paths ("./", "./config/").
+// Environment variables will override values from the loaded files.
 func (c *Config) Load(paths ...string) error {
-	defaultPaths := []string{"./", "./configs"}
-	if paths == nil {
-		for _, path := range defaultPaths {
-			paths = append(paths, path)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(paths) == 0 {
+		paths = []string{"./", "./config/"}
+	}
+
+	mergedFiles := 0
+	for _, path := range paths {
+		files, err := os.ReadDir(path)
+		if err != nil {
+			// Silently ignore paths that don't exist.
+			continue
+		}
+
+		for _, file := range files {
+			if file.IsDir() {
+				continue
+			}
+
+			fileName := file.Name()
+			if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
+				fullPath := filepath.Join(path, fileName)
+				c.v.SetConfigFile(fullPath)
+
+				if err := c.v.MergeInConfig(); err != nil {
+					return fmt.Errorf("instance failed to merge config file %s: %w", fullPath, err)
+				}
+				slog.Debug("Instance merged config file", "path", c.v.ConfigFileUsed())
+				mergedFiles++
+			}
 		}
 	}
 
-	LoadWithPaths(paths...)
+	if mergedFiles == 0 {
+		slog.Debug("Instance found no config files to load.")
+	}
+
 	return nil
 }
 
-// Add registers a config map under a prefix.
-func (c *Config) Add(prefix string, data map[string]any) {
-	Add(prefix, data)
-}
-
-// Env reads from environment variable or fallback.
-func (c *Config) Env(key string, def any) any {
-	return Env(key, def)
-}
-
-// Get retrieves a value by key.
+// Get retrieves a value by key from this specific config instance.
 func (c *Config) Get(key string) any {
-	return Get(key)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.v.Get(key)
 }
 
-// GetString retrieves a string value by key.
+// GetString retrieves a string value by key from this specific config instance.
 func (c *Config) GetString(key string) string {
-	return GetString(key)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.v.GetString(key)
 }
 
-// AutoDiscover finds and prints config files in a directory.
-func (c *Config) AutoDiscover(basePath string) error {
-	files, err := filepath.Glob(filepath.Join(basePath, "*.go"))
-	if err != nil {
-		return err
+// GetInt retrieves an int value by key from this specific config instance.
+func (c *Config) GetInt(key string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.v.GetInt(key)
+}
+
+// GetBool retrieves a boolean value by key from this specific config instance.
+func (c *Config) GetBool(key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.v.GetBool(key)
+}
+
+// IsSet checks if a key is set in this specific config instance.
+func (c *Config) IsSet(key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.v.IsSet(key)
+}
+
+// Inject unmarshals a config prefix from this instance into a struct.
+// It first checks if the key exists before attempting to unmarshal.
+func (c *Config) Inject(prefix string, out any) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.v.IsSet(prefix) {
+		return fmt.Errorf("prefix '%s' not found in config instance", prefix)
 	}
-	for _, f := range files {
-		debugPrint("DISCOVER", f, "FOUND (INSTANCE)")
+
+	if err := c.v.UnmarshalKey(prefix, out); err != nil {
+		return fmt.Errorf("failed to inject config for prefix '%s': %w", prefix, err)
 	}
 	return nil
-}
-
-// Inject unmarshals a config prefix into a struct.
-func (c *Config) Inject(prefix string, out any) error {
-	return Inject(prefix, out)
 }
