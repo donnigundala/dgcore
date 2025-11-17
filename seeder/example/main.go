@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context" // Import context package
 	"log/slog"
 	"os"
 
@@ -49,15 +50,21 @@ func ProductSeeder(db *gorm.DB) error {
 }
 
 func main() {
+	// Create a context for the application lifecycle
+	ctx := context.Background()
+
 	// --- 1. Standard Application Bootstrap ---
 	appSlog := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(appSlog)
 
 	// Load config from file (config.yaml) and environment variables
-	config.Load()
+	if err := config.LoadWithPaths("database/example/config/database.yaml"); err != nil {
+		appSlog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Inject the 'databases' section from config into the ManagerConfig struct.
-	var dbManagerConfig database.ManagerConfig
+	var dbManagerConfig database.Config
 	if err := config.Inject("databases", &dbManagerConfig); err != nil {
 		appSlog.Error("Failed to inject database configurations", "error", err)
 		os.Exit(1)
@@ -81,7 +88,8 @@ func main() {
 
 	// Type-assert the provider to get the underlying GORM instance.
 	sqlProvider, ok := provider.(database.SQLProvider)
-	writerDB := sqlProvider.Gorm().(*gorm.DB)
+	// Use GormWithContext instead of the deprecated Gorm()
+	writerDB := sqlProvider.GormWithContext(ctx)
 	if !ok || writerDB == nil {
 		appSlog.Error("Failed to get a valid GORM writer connection")
 		os.Exit(1)
