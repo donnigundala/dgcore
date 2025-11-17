@@ -1,7 +1,8 @@
 package config
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,30 +14,33 @@ import (
 
 // Load searches for and loads configuration files from default paths.
 // It looks for .env files and any .yaml/.yml files in ./ and ./config/
-func Load() {
+// It returns an error if any config file is found but fails to parse.
+func Load() error {
 	// Default search paths for config files
 	defaultPaths := []string{"./", "./config/"}
-	LoadWithPaths(defaultPaths...)
+	return LoadWithPaths(defaultPaths...)
 }
 
 // LoadWithPaths loads configuration from the specified directory paths.
 // It loads a .env file, then merges all .yaml/.yml files found in the paths,
 // and finally enables environment variable overrides.
-func LoadWithPaths(paths ...string) {
-	// 1. Load .env file. Errors are ignored if the file doesn't exist.
-	_ = godotenv.Load()
+// It returns an error if any config file is found but fails to parse.
+func LoadWithPaths(paths ...string) error {
+	// 1. Load .env file. Errors are ignored if the file doesn't exist, which is standard.
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		slog.Warn("Failed to load .env file", "error", err)
+	}
 
-	// 2. Set up Viper for environment variable overrides (highest priority after explicit Set)
+	// 2. Set up Viper for environment variable overrides (highest priority).
 	viperInstance.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viperInstance.AutomaticEnv()
 
 	// 3. Load and merge all YAML/YML files from the specified paths.
-	// These will be overridden by environment variables.
 	mergedFiles := 0
 	for _, path := range paths {
 		files, err := os.ReadDir(path)
 		if err != nil {
-			// Silently ignore paths that don't exist
+			// Silently ignore paths that don't exist. This is expected behavior.
 			continue
 		}
 
@@ -47,23 +51,24 @@ func LoadWithPaths(paths ...string) {
 
 			fileName := file.Name()
 			if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
-				// Set the config file to be merged
-				viperInstance.SetConfigFile(filepath.Join(path, fileName))
+				fullPath := filepath.Join(path, fileName)
+				viperInstance.SetConfigFile(fullPath)
 
-				// Merge the config file. This adds its values without overwriting
-				// values from previously merged files or environment variables
-				// that have higher priority.
+				// Merge the config file.
 				if err := viperInstance.MergeInConfig(); err != nil {
-					log.Printf("[CONFIG] Warning: could not merge config file %s: %v", fileName, err)
-				} else {
-					log.Printf("[CONFIG] Merged config from %s", viperInstance.ConfigFileUsed())
-					mergedFiles++
+					// This is a critical error. If a config file is present but malformed,
+					// the application should fail fast.
+					return fmt.Errorf("failed to merge config file %s: %w", fullPath, err)
 				}
+				slog.Info("Merged config file", "path", viperInstance.ConfigFileUsed())
+				mergedFiles++
 			}
 		}
 	}
 
 	if mergedFiles == 0 {
-		log.Printf("[CONFIG] No config files found, using defaults and environment variables.")
+		slog.Info("No config files found. Using defaults and environment variables only.")
 	}
+
+	return nil
 }

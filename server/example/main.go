@@ -26,16 +26,17 @@ func main() {
 	// =========================================================================
 	// Configuration
 	// =========================================================================
-	// Load configuration from file into the global config store.
-	if err := config.Load("config/server.yaml"); err != nil {
-		logger.Error("failed to load configuration", "error", err)
+	// Load configuration from default paths (e.g., ./, ./config/) into the global config store.
+	// It's critical to handle this error and fail fast if configuration is malformed.
+	if err := config.Load(); err != nil {
+		logger.Error("critical error: failed to load configuration", "error", err)
 		os.Exit(1)
 	}
 
 	// Inject the 'server.http' section of the config into a struct.
 	var serverCfg server.Config
 	if err := config.Inject("server.http", &serverCfg); err != nil {
-		logger.Error("failed to inject server configuration", "error", err)
+		logger.Error("critical error: failed to inject server configuration", "error", err)
 		os.Exit(1)
 	}
 
@@ -52,7 +53,7 @@ func main() {
 	// =========================================================================
 	mux := http.NewServeMux()
 	mux.Handle("/hello", server.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		// Get the logger from the context using the new ctxutil package.
+		// Get the logger from the context using the ctxutil package.
 		log := ctxutil.LoggerFromContext(r.Context())
 		log.Info("Handling /hello request")
 
