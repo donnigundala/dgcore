@@ -22,7 +22,7 @@ func main() {
 	// 2. Load all configurations from the default path ("./config").
 	// This will pick up `cache.yaml`, `app.yaml`, etc., and merge them.
 	// It also handles .env files and environment variable overrides.
-	if err := config.LoadWithPaths("config/app.yaml"); err != nil {
+	if err := config.LoadWithPaths("cache/example/config/cache.yaml"); err != nil {
 		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
