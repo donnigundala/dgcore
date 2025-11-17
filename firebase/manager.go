@@ -48,7 +48,7 @@ func NewManager(ctx context.Context, configs map[string]*Config, opts ...Manager
 	m.log.Info("Initializing Firebase manager...", "config_count", len(configs))
 
 	for name, cfg := range configs {
-		// Pass the manager's logger down to the provider factory.
+		// The factory will create a sub-logger for the specific app.
 		app, err := newFirebaseApp(ctx, cfg, withAppLogger(m.log))
 		if err != nil {
 			m.log.Error("Failed to initialize Firebase app.", "app_name", name, "error", err)
@@ -84,7 +84,7 @@ func (m *Manager) MustApp(name string) *fb.App {
 }
 
 // Close is a placeholder for potential future cleanup logic.
-// Firebase Go SDK does not require explicit closing of apps.
+// The Firebase Go SDK does not require explicit closing of app instances.
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

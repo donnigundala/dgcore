@@ -8,6 +8,8 @@ import (
 
 	fb "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
+
+	"github.com/donnigundala/dgcore/ctxutil"
 )
 
 // IFCMClient defines the interface for the FCM client.
@@ -22,12 +24,13 @@ type IFCMClient interface {
 // FCMClient is a client for the Firebase Cloud Messaging service.
 type FCMClient struct {
 	client *messaging.Client
-	logger *slog.Logger
+	logger *slog.Logger // Base logger for the client
 }
 
 // NewFCMClient creates a new FCM client from a specific Firebase app instance.
 // This allows you to have FCM clients for multiple Firebase projects.
 func NewFCMClient(app *fb.App, cfg *Config, logger *slog.Logger) (IFCMClient, error) {
+	// Use a background context for initialization as it's a one-time setup.
 	client, err := app.Messaging(context.Background())
 	if err != nil {
 		logger.Error("Unable to initialize FCM Client", "error", err)
@@ -63,6 +66,7 @@ type FCMMessage struct {
 
 // Send sends a push notification to a specific device token.
 func (f *FCMClient) Send(ctx context.Context, token string, msg *FCMMessage) error {
+	log := ctxutil.LoggerFromContext(ctx)
 	message := &messaging.Message{
 		Notification: &messaging.Notification{
 			Title: msg.Title,
@@ -75,19 +79,20 @@ func (f *FCMClient) Send(ctx context.Context, token string, msg *FCMMessage) err
 	resp, err := f.client.Send(ctx, message)
 	if err != nil {
 		if isInvalidTokenError(err) {
-			f.logger.Warn("Invalid or unregistered token", "token", token, "error", err)
+			log.Warn("Invalid or unregistered FCM token", "token", token, "error", err)
 			return ErrInvalidFCMToken
 		}
-		f.logger.Error("Failed to send message", "token", token, "error", err)
+		log.Error("Failed to send FCM message", "token", token, "error", err)
 		return err
 	}
 
-	f.logger.Info("Message sent successfully", "response", resp)
+	log.Info("FCM message sent successfully", "response", resp)
 	return nil
 }
 
 // SendToTopic sends a push notification to all devices subscribed to a specific topic.
 func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg *FCMMessage) error {
+	log := ctxutil.LoggerFromContext(ctx)
 	message := &messaging.Message{
 		Notification: &messaging.Notification{
 			Title: msg.Title,
@@ -99,18 +104,20 @@ func (f *FCMClient) SendToTopic(ctx context.Context, topic string, msg *FCMMessa
 
 	resp, err := f.client.Send(ctx, message)
 	if err != nil {
-		f.logger.Error("Failed to send message to topic", "topic", topic, "error", err)
+		log.Error("Failed to send message to FCM topic", "topic", topic, "error", err)
 		return err
 	}
 
-	f.logger.Info("Message sent to topic", "topic", topic, "response", resp)
+	log.Info("Message sent to FCM topic", "topic", topic, "response", resp)
 	return nil
 }
 
 // SendToMultipleTokens sends a push notification to multiple device tokens.
+// It returns a slice of tokens that were found to be invalid.
 func (f *FCMClient) SendToMultipleTokens(ctx context.Context, tokens []string, msg *FCMMessage) ([]string, error) {
+	log := ctxutil.LoggerFromContext(ctx)
 	if len(tokens) == 0 {
-		return nil, errors.New("no tokens provided")
+		return nil, errors.New("no tokens provided for FCM multicast message")
 	}
 
 	batch := &messaging.MulticastMessage{
@@ -124,7 +131,7 @@ func (f *FCMClient) SendToMultipleTokens(ctx context.Context, tokens []string, m
 
 	resp, err := f.client.SendEachForMulticast(ctx, batch)
 	if err != nil {
-		f.logger.Error("Failed to send multicast message", "error", err)
+		log.Error("Failed to send FCM multicast message", "error", err)
 		return nil, err
 	}
 
@@ -133,36 +140,38 @@ func (f *FCMClient) SendToMultipleTokens(ctx context.Context, tokens []string, m
 		if !r.Success {
 			if isInvalidTokenError(r.Error) {
 				invalidTokens = append(invalidTokens, tokens[i])
-				f.logger.Warn("Invalid token detected in batch", "token", tokens[i], "error", r.Error)
+				log.Warn("Invalid token detected in FCM batch", "token", tokens[i], "error", r.Error)
 			} else {
-				f.logger.Error("Error sending to token in batch", "token", tokens[i], "error", r.Error)
+				log.Error("Error sending to token in FCM batch", "token", tokens[i], "error", r.Error)
 			}
 		}
 	}
 
-	f.logger.Info("Multicast message sent", "success_count", resp.SuccessCount, "failure_count", resp.FailureCount)
+	log.Info("FCM multicast message sent", "success_count", resp.SuccessCount, "failure_count", resp.FailureCount)
 	return invalidTokens, nil
 }
 
 // SubscribeToTopic subscribes a list of device tokens to a specific topic.
 func (f *FCMClient) SubscribeToTopic(ctx context.Context, tokens []string, topic string) error {
+	log := ctxutil.LoggerFromContext(ctx)
 	resp, err := f.client.SubscribeToTopic(ctx, tokens, topic)
 	if err != nil {
-		f.logger.Error("Failed to subscribe to topic", "topic", topic, "error", err)
+		log.Error("Failed to subscribe to FCM topic", "topic", topic, "error", err)
 		return err
 	}
-	f.logger.Info("Subscribed tokens to topic", "topic", topic, "count", resp.SuccessCount)
+	log.Info("Subscribed tokens to FCM topic", "topic", topic, "success_count", resp.SuccessCount, "failure_count", len(resp.Errors))
 	return nil
 }
 
 // UnsubscribeFromTopic unsubscribes a list of device tokens from a specific topic.
 func (f *FCMClient) UnsubscribeFromTopic(ctx context.Context, tokens []string, topic string) error {
+	log := ctxutil.LoggerFromContext(ctx)
 	resp, err := f.client.UnsubscribeFromTopic(ctx, tokens, topic)
 	if err != nil {
-		f.logger.Error("Failed to unsubscribe from topic", "topic", topic, "error", err)
+		log.Error("Failed to unsubscribe from FCM topic", "topic", topic, "error", err)
 		return err
 	}
-	f.logger.Info("Unsubscribed tokens from topic", "topic", topic, "count", resp.SuccessCount)
+	log.Info("Unsubscribed tokens from FCM topic", "topic", topic, "success_count", resp.SuccessCount, "failure_count", len(resp.Errors))
 	return nil
 }
 

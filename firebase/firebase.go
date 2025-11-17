@@ -10,7 +10,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-// firebaseApp wraps the Firebase app object.
+// firebaseApp wraps the main Firebase app object.
 type firebaseApp struct {
 	App    *firebase.App
 	logger *slog.Logger
@@ -26,7 +26,7 @@ func withAppLogger(logger *slog.Logger) appOption {
 	}
 }
 
-// newFirebaseApp initializes and returns a new Firebase instance.
+// newFirebaseApp initializes and returns a new Firebase app instance.
 func newFirebaseApp(ctx context.Context, cfg *Config, opts ...appOption) (*firebaseApp, error) {
 	fb := &firebaseApp{}
 
@@ -34,6 +34,8 @@ func newFirebaseApp(ctx context.Context, cfg *Config, opts ...appOption) (*fireb
 		opt(fb)
 	}
 
+	// If no logger was provided by the options (e.g., from the manager),
+	// create a default one.
 	if fb.logger == nil {
 		fb.logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
@@ -41,14 +43,15 @@ func newFirebaseApp(ctx context.Context, cfg *Config, opts ...appOption) (*fireb
 
 	var credOption option.ClientOption
 
+	// Determine the credentials source.
 	if cfg.CredentialsJSON != "" {
-		fb.logger.Info("Initializing Firebase with credentials from firebase.credentials_json environment variable")
+		fb.logger.Info("Initializing Firebase with credentials from 'credentials_json' config key")
 		credOption = option.WithCredentialsJSON([]byte(cfg.CredentialsJSON))
 	} else if cfg.CredentialsFile != "" {
 		fb.logger.Info("Initializing Firebase with credentials file", "path", cfg.CredentialsFile)
 		credOption = option.WithCredentialsFile(cfg.CredentialsFile)
 	} else {
-		err := errors.New("firebase credentials not found. Set firebase.credentials_json or firebase.credentials_file in your config")
+		err := errors.New("firebase credentials not found. Set 'credentials_json' or 'credentials_file' in your config")
 		fb.logger.Error(err.Error())
 		return nil, err
 	}
