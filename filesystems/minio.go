@@ -11,6 +11,8 @@ import (
 
 	minio "github.com/minio/minio-go/v7"
 	creds "github.com/minio/minio-go/v7/pkg/credentials"
+
+	"github.com/donnigundala/dgcore/ctxutil"
 )
 
 // MinIOConfig holds configuration for the MinIO driver.
@@ -24,7 +26,7 @@ type MinIOConfig struct {
 }
 
 // newMinioDriver is the constructor for the MinIO driver, returning a Storage interface.
-func newMinioDriver(config interface{}, logger *slog.Logger, traceIDKey any) (Storage, error) {
+func newMinioDriver(config interface{}, logger *slog.Logger) (Storage, error) {
 	cfg, ok := config.(MinIOConfig)
 	if !ok {
 		raw, ok := config.(map[string]interface{})
@@ -37,7 +39,7 @@ func newMinioDriver(config interface{}, logger *slog.Logger, traceIDKey any) (St
 		}
 		cfg = converted
 	}
-	return newMinioDriverInternal(cfg, logger, traceIDKey)
+	return newMinioDriverInternal(cfg, logger)
 }
 
 // convertMinioConfig handles the conversion from a map to MinIOConfig struct.
@@ -69,14 +71,13 @@ func convertMinioConfig(cfg map[string]interface{}) (MinIOConfig, error) {
 
 // MinioDriver implements Storage using MinIO.
 type MinioDriver struct {
-	client     *minio.Client
-	cfg        MinIOConfig
-	logger     *slog.Logger
-	traceIDKey any
+	client *minio.Client
+	cfg    MinIOConfig
+	logger *slog.Logger // Base logger for the driver
 }
 
 // newMinioDriverInternal is the internal constructor for MinioDriver.
-func newMinioDriverInternal(cfg MinIOConfig, logger *slog.Logger, traceIDKey any) (*MinioDriver, error) {
+func newMinioDriverInternal(cfg MinIOConfig, logger *slog.Logger) (*MinioDriver, error) {
 	minioClient, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  creds.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		Secure: cfg.UseSSL,
@@ -103,17 +104,14 @@ func newMinioDriverInternal(cfg MinIOConfig, logger *slog.Logger, traceIDKey any
 		}
 	}
 
-	return &MinioDriver{client: minioClient, cfg: cfg, logger: logger, traceIDKey: traceIDKey}, nil
+	return &MinioDriver{client: minioClient, cfg: cfg, logger: logger}, nil
 }
 
+// loggerFrom retrieves the context-aware logger.
 func (m *MinioDriver) loggerFrom(ctx context.Context) *slog.Logger {
-	logger := m.logger
-	if m.traceIDKey != nil {
-		if traceID, ok := ctx.Value(m.traceIDKey).(string); ok && traceID != "" {
-			logger = logger.With(slog.String("trace_id", traceID))
-		}
-	}
-	return logger
+	// Use the ctxutil helper to get the logger from the context.
+	// This logger will already contain the request_id if present.
+	return ctxutil.LoggerFromContext(ctx)
 }
 
 func (m *MinioDriver) Upload(ctx context.Context, key string, data io.Reader, size int64, visibility Visibility) error {
