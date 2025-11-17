@@ -56,25 +56,26 @@ func TestNewManager_WithSQLite(t *testing.T) {
 	// 4. Check the provider type and get the underlying GORM DB.
 	sqlProvider, ok := provider.(SQLProvider)
 	require.True(t, ok, "Provider should be a SQLProvider")
-	gormDB := sqlProvider.Gorm().(*gorm.DB)
+	// Use GormWithContext instead of the deprecated Gorm()
+	ctx := context.Background() // Define context for GormWithContext
+	gormDB := sqlProvider.GormWithContext(ctx)
 	require.NotNil(t, gormDB, "GORM DB instance should not be nil")
 
 	// 5. Perform database operations.
-	ctx := context.Background()
 
 	// AutoMigrate a table.
-	err = gormDB.WithContext(ctx).AutoMigrate(&TestModel{})
+	err = gormDB.AutoMigrate(&TestModel{})
 	require.NoError(t, err, "AutoMigrate should succeed")
 
 	// Create a record.
 	newUser := TestModel{Name: "Test User"}
-	err = gormDB.WithContext(ctx).Create(&newUser).Error
+	err = gormDB.Create(&newUser).Error
 	require.NoError(t, err, "Create operation should succeed")
 	assert.Greater(t, newUser.ID, uint(0), "Record should have a non-zero ID after creation")
 
 	// Read the record back.
 	var fetchedUser TestModel
-	err = gormDB.WithContext(ctx).First(&fetchedUser, newUser.ID).Error
+	err = gormDB.First(&fetchedUser, newUser.ID).Error
 	require.NoError(t, err, "Read operation should succeed")
 	assert.Equal(t, "Test User", fetchedUser.Name, "Fetched record should have the correct name")
 

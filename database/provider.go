@@ -24,9 +24,6 @@ type Provider interface {
 // typically those provided by a library like GORM.
 type SQLProvider interface {
 	Provider
-	// Gorm returns the underlying GORM DB instance for complex queries.
-	// DEPRECATED: This method is not context-aware. Use GormWithContext instead.
-	Gorm() interface{}
 	// GormWithContext returns a new GORM session bound to the provided context.
 	GormWithContext(ctx context.Context) *gorm.DB
 }

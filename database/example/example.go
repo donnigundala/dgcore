@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context" // Import context package
 	"log/slog"
 	"os"
 
@@ -19,12 +20,18 @@ type User struct {
 }
 
 func main() {
+	// Create a context for the application lifecycle
+	ctx := context.Background()
+
 	// 1. Initialize a logger for the application.
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
 
 	// 2. Load all configurations from the default path ("./config").
-	config.Load()
+	if err := config.LoadWithPaths("database/example/config/database.yaml"); err != nil {
+		logger.Error("failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// 3. Define a struct to hold the database manager configuration.
 	// The top-level key in your YAML file should be "databases".
@@ -64,7 +71,8 @@ func main() {
 		slog.Error("Connection is not a SQL provider")
 		os.Exit(1)
 	}
-	gormDB := sqlProvider.Gorm().(*gorm.DB)
+	// Use GormWithContext instead of the deprecated Gorm()
+	gormDB := sqlProvider.GormWithContext(ctx)
 
 	// 7. Perform Operations
 	slog.Info("--- Performing DB Operations ---")
