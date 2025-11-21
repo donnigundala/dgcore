@@ -1,0 +1,78 @@
+# Example configuration for the database package.
+# Values here act as defaults and can be overridden by environment variables.
+# For example, to override the postgres password, set an env var:
+# DATABASES_CONNECTIONS_MY_POSTGRES_SQL_PRIMARY_PASSWORD="your_secure_password"
+
+databases:
+  default_connection: "my_sqlite"
+
+  connections:
+    # -------------------------
+    # SQLite Example
+    # -------------------------
+    my_sqlite:
+      driver: "sql"
+      sql:
+        driver_name: "sqlite"
+        primary:
+          db_name: "example.db"
+        log_level: "info"
+
+    # -------------------------
+    # PostgreSQL Example
+    # -------------------------
+    my_postgres:
+      driver: "sql"
+      policy:
+        ping_interval: "15s"
+      sql:
+        driver_name: "postgres"
+        primary:
+          host: "localhost"
+          port: "5432"
+          user: "postgres"
+          password: "password" # Default password, should be overridden by env var
+          db_name: "my_app"
+        # comment this replicas block to enable read-only access
+        replicas:
+          - host: "localhost" # In a real scenario, this would be a different host
+            port: "5432"
+            user: "postgres"
+            password: "password"
+            db_name: "my_app_replica" # Or the same DB if using a read-only user
+        pool:
+          max_open_conns: 20
+        log_level: "warn"
+
+    # -------------------------
+    # MySQL Example
+    # -------------------------
+    my_mysql:
+      driver: "sql"
+      policy:
+        ping_interval: "15s"
+      sql:
+        driver_name: "mysql"
+        primary:
+          host: "127.0.0.1"
+          port: "3306"
+          user: "root"
+          password: "password" # Default password, should be overridden by env var
+          db_name: "my_mysql_db"
+        pool:
+          max_open_conns: 25
+        log_level: "warn"
+
+    # -------------------------
+    # MongoDB Example
+    # -------------------------
+    my_mongo:
+      driver: "mongo"
+      policy:
+        ping_interval: "20s"
+      mongo:
+        uri: "mongodb://localhost:27017" # Default URI, should be overridden by env var
+        database: "my_mongo_db"
+        pool:
+          max_pool_size: 50
+        log_level: "info"

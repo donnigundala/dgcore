@@ -1,18 +1,11 @@
 go 1.25.0
 
 use (
-	./broker
-	./cache
 	./config
-	./console
 	./container
 	./contracts
 	./ctxutil
-	./database
-	./filesystems
-	./firebase
 	./foundation
 	./http
 	./skeleton
-	./validation
 )

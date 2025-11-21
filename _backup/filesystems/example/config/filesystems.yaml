@@ -1,0 +1,31 @@
+# This is an example configuration file for the filesystems package.
+# The top-level key 'filesystems' is important, as the example code uses
+# `config.Inject("filesystems", &fsManagerConfig)` to load this structure.
+
+filesystems:
+  default: "local"
+
+  disks:
+    local:
+      driver: "local"
+      config:
+        basePath: "./storage/app" # Relative to where the app is run
+        baseURL:  "http://localhost:8080/storage"
+
+    s3_public:
+      driver: "s3"
+      config:
+        bucket:    "your-public-s3-bucket" # Should be overridden by env var FILESYSTEMS_DISKS_S3_PUBLIC_CONFIG_BUCKET
+        region:    "us-east-1"
+        accessKey: "" # Should be overridden by env var FILESYSTEMS_DISKS_S3_PUBLIC_CONFIG_ACCESSKEY
+        secretKey: "" # Should be overridden by env var FILESYSTEMS_DISKS_S3_PUBLIC_CONFIG_SECRETKEY
+        baseURL:   "https://your-public-s3-bucket.s3.us-east-1.amazonaws.com"
+
+    s3_private:
+      driver: "s3"
+      config:
+        bucket: "my-private-files-bucket"
+        region: "us-east-1"
+        accessKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PRIVATE_CONFIG_ACCESSKEY
+        secretKey: "" # Override with env: FILESYSTEMS_DISKS_S3_PRIVATE_CONFIG_SECRETKEY
+        baseURL:   "https://your-public-s3-bucket.s3.us-east-1.amazonaws.com"

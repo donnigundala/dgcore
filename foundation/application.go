@@ -5,12 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/donnigundala/dgcore/console"
 	"github.com/donnigundala/dgcore/container"
 	contractContainer "github.com/donnigundala/dgcore/contracts/container"
 	"github.com/donnigundala/dgcore/contracts/foundation"
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
-	"github.com/donnigundala/dgcore/http"
 )
 
 // Application is the central struct of the framework.
@@ -26,34 +23,13 @@ type Application struct {
 // New creates a new Application instance.
 func New(basePath string) *Application {
 	app := &Application{
-		Container: container.NewContainer(), // Assuming contractContainer.New() is not available or container.New() returns a type compatible with contractContainer.Container
+		Container: container.NewContainer(),
 		basePath:  basePath,
 	}
 
 	// Bind the application instance to the container
 	app.Instance("app", app)
 	app.Instance("container", app.Container)
-
-	// Bind the Router
-	app.Singleton("router", func() interface{} {
-		return http.NewRouter()
-	})
-
-	// Bind the Kernel
-	app.Singleton("kernel", func() interface{} {
-		// Resolve the router
-		routerInstance, err := app.Make("router")
-		if err != nil {
-			panic(err)
-		}
-		router := routerInstance.(contractHTTP.Router)
-		return http.NewKernel(app, router)
-	})
-
-	// Bind the Console Kernel
-	app.Singleton("console.kernel", func() interface{} {
-		return console.NewKernel()
-	})
 
 	return app
 }

@@ -1,0 +1,13 @@
+# Example database configuration
+# Uncomment and configure when you add the database module
+
+# databases:
+#   default_connection: "postgres"
+#   connections:
+#     postgres:
+#       driver: "postgres"
+#       host: "localhost"
+#       port: 5432
+#       database: "myapp"
+#       username: "postgres"
+#       password: "secret"

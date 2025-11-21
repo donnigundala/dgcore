@@ -1,0 +1,27 @@
+# This is an example configuration file for the cache package.
+# The top-level key 'caches' is important, as the example code uses
+# `config.Inject("caches", &cacheConfigs)` to load this structure.
+
+caches:
+  # The 'default' cache connection, using Redis.
+  default:
+    driver: "redis"
+    namespace: "dg-framework-app"
+    separator: ":"
+    redis:
+      host: "127.0.0.1"
+      port: "6379"
+      password: "" # Use ${CACHE_PASSWORD} to load from environment
+      db: 0
+      ttl: "1h"
+      enable_tls: false
+
+  # A second cache connection named 'session', using Memcache.
+  session:
+    driver: "memcache"
+    namespace: "dg-framework-session"
+    separator: ":"
+    memcache:
+      servers:
+        - "127.0.0.1:11211"
+      ttl: "30m"

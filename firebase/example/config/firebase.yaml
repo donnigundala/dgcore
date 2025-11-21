@@ -1,9 +1,0 @@
-# This is an example configuration file for the firebase package.
-firebase:
-  # A 'default' app connection
-  default:
-    # For local development, you can use a file path.
-    # In a real app, this path would be relative to the executable.
-    credentials_file: "./config/firebase-credentials.json"
-    # In production, it's better to use an environment variable for the JSON content.
-    # credentials_json: ${FIREBASE_CREDENTIALS_JSON}

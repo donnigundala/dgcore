@@ -1,0 +1,12 @@
+# Example cache configuration
+# Uncomment and configure when you add the cache module
+
+# cache:
+#   default: "redis"
+#   stores:
+#     redis:
+#       driver: "redis"
+#       host: "localhost"
+#       port: 6379
+#       password: ""
+#       database: 0

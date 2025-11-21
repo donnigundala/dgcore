@@ -1,0 +1,4 @@
+name: "DG Framework App"
+env: "local"
+debug: true
+port: 8080
