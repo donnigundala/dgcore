@@ -75,7 +75,7 @@ import (
 	"os"
 
 	"github.com/donnigundala/dgcore/config"
-	"github.com/donnigundala/dgcore/database"
+	"github.com/donnigundala/dgcore/providers/database"
 	"github.com/donnigundala/dgcore/ctxutil"
 	"gorm.io/gorm"
 )
