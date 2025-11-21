@@ -5,7 +5,9 @@ use (
 	./container
 	./contracts
 	./ctxutil
+	./errors
 	./foundation
 	./http
+	./logging
 	./skeleton
 )
