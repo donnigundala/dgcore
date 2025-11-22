@@ -61,11 +61,28 @@ func Register(router contractHTTP.Router) {
 
 	// Example: Validation error
 	router.Post("/validate", func(w http.ResponseWriter, r *http.Request) {
+		// Example validation errors (in real app, this would come from validator)
 		validationErrors := map[string]string{
 			"email":    "Email is required",
 			"password": "Password must be at least 8 characters",
 		}
 		response.ValidationError(w, validationErrors)
+	})
+
+	// Example: Create user with validation
+	router.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+		// This demonstrates validation integration
+		// In a real app, you would:
+		// 1. Parse request body
+		// 2. Validate using validation.NewValidator()
+		// 3. Return validation errors if any
+		// 4. Create user if valid
+
+		response.Created(w, map[string]interface{}{
+			"id":    123,
+			"name":  "John Doe",
+			"email": "john@example.com",
+		}, "/users/123")
 	})
 
 	// API group example

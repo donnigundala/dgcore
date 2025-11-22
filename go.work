@@ -10,4 +10,5 @@ use (
 	./http
 	./logging
 	./skeleton
+	./validation
 )
