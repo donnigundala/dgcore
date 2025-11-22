@@ -18,6 +18,7 @@ type Application struct {
 	basePath  string
 	providers []ServiceProvider
 	booted    bool
+	shutdown  *shutdownManager
 }
 
 // New creates a new Application instance.
@@ -25,6 +26,7 @@ func New(basePath string) *Application {
 	app := &Application{
 		Container: container.NewContainer(),
 		basePath:  basePath,
+		shutdown:  newShutdownManager(),
 	}
 
 	// Bind the application instance to the container
