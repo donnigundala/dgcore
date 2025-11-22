@@ -69,30 +69,28 @@ func main() {
 		return coreHTTP.NewRouter()
 	})
 
-	// Bind the HTTP Kernel
-	app.Singleton("kernel", func() interface{} {
-		routerInstance, err := app.Make("router")
-		if err != nil {
-			// Example of using errors package
-			wrappedErr := errors.Wrap(err, "failed to resolve router for kernel")
-			logger.Error("Kernel initialization failed", "error", wrappedErr)
-			panic(wrappedErr)
-		}
-		router := routerInstance.(http.Router)
-		return coreHTTP.NewKernel(app, router)
-	})
-
-	// Register Routes
+	// Get router instance
 	routerInstance, err := app.Make("router")
 	if err != nil {
-		// Example of using errors package with HTTP status
 		wrappedErr := errors.Wrap(err, "failed to resolve router").
 			WithCode("ROUTER_RESOLUTION_FAILED").
 			WithStatus(500)
 		logger.Error("Failed to resolve router", "error", wrappedErr, "code", wrappedErr.Code())
 		os.Exit(1)
 	}
-	routes.Register(routerInstance.(http.Router))
+	router := routerInstance.(http.Router)
+
+	// Apply global middleware
+	logger.Info("Applying global middleware")
+	router.Use(
+		coreHTTP.RecoveryWithDefault(),        // Panic recovery
+		coreHTTP.CORSWithDefault(),            // CORS
+		coreHTTP.SecurityHeadersWithDefault(), // Security headers
+		coreHTTP.BodySizeLimit(10*1024*1024),  // 10MB limit
+	)
+
+	// Register Routes
+	routes.Register(router)
 
 	logger.Debug("Routes registered successfully")
 
