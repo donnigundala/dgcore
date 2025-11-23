@@ -5,3 +5,6 @@ tmp/*
 .DS_Store
 # Or the more explicit pattern:
 **/.DS_Store
+cmd
+_backup
+skeleton

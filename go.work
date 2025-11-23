@@ -1,0 +1,15 @@
+go 1.25.0
+
+use (
+	./config
+	./container
+	./contracts
+	./ctxutil
+	./errors
+	./foundation
+	./http
+	./logging
+	./skeleton
+	./testing
+	./validation
+)
