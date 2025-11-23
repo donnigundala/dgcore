@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/donnigundala/dgcore/contracts/container"
+	"github.com/donnigundala/dgcore/contracts/foundation"
 	foundationImpl "github.com/donnigundala/dgcore/foundation"
 )
 
@@ -17,14 +18,16 @@ type MockServiceProvider struct {
 	App container.Container
 }
 
-func (p *MockServiceProvider) Register() {
-	p.App.Bind("mock_service", func() interface{} {
+func (p *MockServiceProvider) Register(app foundation.Application) error {
+	app.Bind("mock_service", func() interface{} {
 		return &MockService{}
 	})
+	return nil
 }
 
-func (p *MockServiceProvider) Boot() {
+func (p *MockServiceProvider) Boot(app foundation.Application) error {
 	// Boot logic
+	return nil
 }
 
 func TestApplicationLifecycle(t *testing.T) {

@@ -9,7 +9,7 @@ type Application interface {
 	container.Container
 
 	// Lifecycle
-	Boot()
+	Boot() error
 	IsBooted() bool
 
 	// Paths
@@ -23,5 +23,7 @@ type Application interface {
 	IsProduction() bool
 
 	// Service Providers
-	Register(provider ServiceProvider)
+	Register(provider ServiceProvider) error
+	GetProviders() []ServiceProvider
+	HasProvider(name string) bool
 }

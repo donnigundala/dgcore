@@ -1,6 +1,7 @@
 package foundation
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -37,27 +38,36 @@ func New(basePath string) *Application {
 }
 
 // Register registers a service provider with the application.
-func (app *Application) Register(provider foundation.ServiceProvider) {
+func (app *Application) Register(provider foundation.ServiceProvider) error {
 	app.providers = append(app.providers, provider)
-	provider.Register()
+
+	if err := provider.Register(app); err != nil {
+		return fmt.Errorf("failed to register provider: %w", err)
+	}
 
 	if app.booted {
-		provider.Boot()
+		if err := provider.Boot(app); err != nil {
+			return fmt.Errorf("failed to boot provider: %w", err)
+		}
 	}
+
+	return nil
 }
 
 // Boot boots the application and all registered providers.
-// Boot boots the application and all registered providers.
-func (app *Application) Boot() {
+func (app *Application) Boot() error {
 	if app.booted {
-		return
+		return nil
 	}
 
 	for _, provider := range app.providers {
-		provider.Boot()
+		if err := provider.Boot(app); err != nil {
+			return fmt.Errorf("failed to boot provider: %w", err)
+		}
 	}
 
 	app.booted = true
+	return nil
 }
 
 // IsBooted checks if the application has been booted.
@@ -97,6 +107,27 @@ func (app *Application) Environment() string {
 // IsProduction checks if the application is running in production mode.
 func (app *Application) IsProduction() bool {
 	return app.Environment() == "production"
+}
+
+// GetProviders returns all registered service providers.
+func (app *Application) GetProviders() []foundation.ServiceProvider {
+	// Return a copy to prevent external modification
+	providers := make([]foundation.ServiceProvider, len(app.providers))
+	copy(providers, app.providers)
+	return providers
+}
+
+// HasProvider checks if a provider with the given name is registered.
+// This only works for providers that implement PluginProvider interface.
+func (app *Application) HasProvider(name string) bool {
+	for _, p := range app.providers {
+		if plugin, ok := p.(foundation.PluginProvider); ok {
+			if plugin.Name() == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Log returns the application logger.

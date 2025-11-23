@@ -16,12 +16,25 @@ type MockApplication struct {
 	booted                 bool
 }
 
-func (m *MockApplication) Boot() {
+func (m *MockApplication) Boot() error {
 	m.booted = true
+	return nil
 }
 
 func (m *MockApplication) IsBooted() bool {
 	return m.booted
+}
+
+func (m *MockApplication) Register(provider foundation.ServiceProvider) error {
+	return nil
+}
+
+func (m *MockApplication) GetProviders() []foundation.ServiceProvider {
+	return nil
+}
+
+func (m *MockApplication) HasProvider(name string) bool {
+	return false
 }
 
 // MockRouter is a mock implementation of contractHTTP.Router
