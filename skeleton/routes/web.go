@@ -5,8 +5,24 @@ import (
 
 	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
 	"github.com/donnigundala/dgcore/ctxutil"
+	"github.com/donnigundala/dgcore/http/request"
 	"github.com/donnigundala/dgcore/http/response"
+	"github.com/donnigundala/dgcore/validation"
 )
+
+// CreateUserRequest represents a user creation request.
+type CreateUserRequest struct {
+	Name  string `json:"name" validate:"required,min=3"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
+}
+
+// SearchRequest represents a search request.
+type SearchRequest struct {
+	Query   string `json:"query" form:"query"`
+	Page    int    `json:"page" form:"page"`
+	PerPage int    `json:"per_page" form:"per_page"`
+}
 
 // Register registers the web routes.
 func Register(router contractHTTP.Router) {
@@ -34,8 +50,28 @@ func Register(router contractHTTP.Router) {
 		})
 	})
 
-	// Example: Pagination
+	// Example: Query parameters
+	router.Get("/search", func(w http.ResponseWriter, r *http.Request) {
+		// Using request helpers
+		query := request.Query(r, "q", "")
+		page := request.QueryInt(r, "page", 1)
+		perPage := request.QueryInt(r, "per_page", 20)
+		sortBy := request.Query(r, "sort", "created_at")
+
+		response.JSON(w, http.StatusOK, map[string]interface{}{
+			"query":    query,
+			"page":     page,
+			"per_page": perPage,
+			"sort_by":  sortBy,
+		})
+	})
+
+	// Example: Pagination with query params
 	router.Get("/users", func(w http.ResponseWriter, r *http.Request) {
+		// Get pagination params
+		page := request.QueryInt(r, "page", 1)
+		perPage := request.QueryInt(r, "per_page", 20)
+
 		// Mock users data
 		users := []map[string]interface{}{
 			{"id": 1, "name": "John Doe", "email": "john@example.com"},
@@ -44,9 +80,58 @@ func Register(router contractHTTP.Router) {
 		}
 
 		// Pagination metadata
-		meta := response.NewPaginationMeta(1, 20, 100)
+		meta := response.NewPaginationMeta(page, perPage, 100)
 
 		response.Paginated(w, users, meta)
+	})
+
+	// Example: JSON body with validation
+	router.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+		var req CreateUserRequest
+		validator := validation.NewValidator()
+
+		// Parse and validate JSON
+		err := request.JSONWithValidation(r, &req, validator)
+		if err != nil {
+			if valErr, ok := err.(*validation.Error); ok {
+				response.ValidationError(w, valErr.Errors)
+				return
+			}
+			response.BadRequest(w, err.Error())
+			return
+		}
+
+		// Success - create user (mock)
+		response.Created(w, map[string]interface{}{
+			"id":    123,
+			"name":  req.Name,
+			"email": req.Email,
+			"age":   req.Age,
+		}, "/users/123")
+	})
+
+	// Example: Bind query params to struct
+	router.Get("/api/search", func(w http.ResponseWriter, r *http.Request) {
+		var req SearchRequest
+		err := request.BindQuery(r, &req, nil)
+		if err != nil {
+			response.BadRequest(w, err.Error())
+			return
+		}
+
+		// Set defaults
+		if req.Page == 0 {
+			req.Page = 1
+		}
+		if req.PerPage == 0 {
+			req.PerPage = 20
+		}
+
+		response.JSON(w, http.StatusOK, map[string]interface{}{
+			"query":    req.Query,
+			"page":     req.Page,
+			"per_page": req.PerPage,
+		})
 	})
 
 	// Example: Error responses
@@ -59,7 +144,7 @@ func Register(router contractHTTP.Router) {
 		response.NotFound(w, "Resource not found")
 	})
 
-	// Example: Validation error
+	// Example: Validation error (manual)
 	router.Post("/validate", func(w http.ResponseWriter, r *http.Request) {
 		// Example validation errors (in real app, this would come from validator)
 		validationErrors := map[string]string{
@@ -67,22 +152,6 @@ func Register(router contractHTTP.Router) {
 			"password": "Password must be at least 8 characters",
 		}
 		response.ValidationError(w, validationErrors)
-	})
-
-	// Example: Create user with validation
-	router.Post("/users", func(w http.ResponseWriter, r *http.Request) {
-		// This demonstrates validation integration
-		// In a real app, you would:
-		// 1. Parse request body
-		// 2. Validate using validation.NewValidator()
-		// 3. Return validation errors if any
-		// 4. Create user if valid
-
-		response.Created(w, map[string]interface{}{
-			"id":    123,
-			"name":  "John Doe",
-			"email": "john@example.com",
-		}, "/users/123")
 	})
 
 	// API group example
@@ -93,6 +162,17 @@ func Register(router contractHTTP.Router) {
 			response.JSON(w, http.StatusOK, map[string]interface{}{
 				"status":    "healthy",
 				"timestamp": "2024-01-01T00:00:00Z",
+			})
+		})
+
+		// Example: Path parameters
+		r.Get("/users/:id", func(w http.ResponseWriter, r *http.Request) {
+			userID := request.ParamInt(r, "id")
+
+			response.JSON(w, http.StatusOK, map[string]interface{}{
+				"id":    userID,
+				"name":  "John Doe",
+				"email": "john@example.com",
 			})
 		})
 	})
