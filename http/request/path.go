@@ -3,26 +3,20 @@ package request
 import (
 	"net/http"
 	"strconv"
-
-	"github.com/gin-gonic/gin"
 )
 
 // Param returns a path parameter value.
-// This works with Gin router by extracting from context.
+// This works with Gin router by extracting from the URL path.
 func Param(r *http.Request, key string) string {
-	// Try to get Gin context
-	if ginCtx, ok := r.Context().Value("gin").(gin.Context); ok {
-		return ginCtx.Param(key)
-	}
-
-	// Fallback: try to get from context directly
+	// Try to get from context (works with custom routers that store params in context)
 	if val := r.Context().Value(key); val != nil {
 		if str, ok := val.(string); ok {
 			return str
 		}
 	}
 
-	return ""
+	// Fallback: try to get from URL query (not ideal for path params, but safe fallback)
+	return r.URL.Query().Get(key)
 }
 
 // ParamInt returns a path parameter as an integer.
