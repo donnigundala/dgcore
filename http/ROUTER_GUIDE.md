@@ -9,8 +9,9 @@ The DG Framework uses a **switchable router pattern** - you can use Gin (default
 package main
 
 import (
-    "github.com/donnigundala/dgcore/foundation"
-    "github.com/donnigundala/dgcore/http"
+    "github.com/donnigundala/dg-core/foundation"
+    "github.com/donnigundala/dg-core/http"
+    "github.com/donnigundala/dg-core/contracts/http"
 )
 
 func main() {

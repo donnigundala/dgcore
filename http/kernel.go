@@ -3,8 +3,8 @@ package http
 import (
 	"net/http"
 
-	"github.com/donnigundala/dgcore/contracts/foundation"
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
+	"github.com/donnigundala/dg-core/contracts/foundation"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
 )
 
 // Kernel is the concrete implementation of the HTTP kernel.

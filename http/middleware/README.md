@@ -16,7 +16,7 @@ The DG Framework includes **7 essential production middleware** components to ha
 
 **Usage:**
 ```go
-import coreHTTP "github.com/donnigundala/dgcore/http"
+import coreHTTP "github.com/donnigundala/dg-core/http"
 
 // With custom logger
 router.Use(coreHTTP.Recovery(logger))
@@ -184,9 +184,9 @@ package main
 import (
     "time"
     
-    "github.com/donnigundala/dgcore/foundation"
-    coreHTTP "github.com/donnigundala/dgcore/http"
-    "github.com/donnigundala/dgcore/logging"
+    "github.com/donnigundala/dg-core/foundation"
+    coreHTTP "github.com/donnigundala/dg-core/http"
+    "github.com/donnigundala/dg-core/logging"
 )
 
 func main() {

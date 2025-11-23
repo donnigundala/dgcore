@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/donnigundala/dgcore/errors"
+	"github.com/donnigundala/dg-core/errors"
 )
 
 // MockReporter is an example error reporter implementation.
@@ -61,7 +61,7 @@ func main() {
 
 	fmt.Println("=== Example Complete ===")
 	fmt.Println("\nTo integrate with real error reporting services:")
-	fmt.Println("1. Install plugin: go get github.com/donnigundala/dgcore-sentry")
+	fmt.Println("1. Install plugin: go get github.com/donnigundala/dg-core-sentry")
 	fmt.Println("2. Initialize: reporter := sentry.NewReporter(dsn)")
 	fmt.Println("3. Set reporter: errors.SetReporter(reporter)")
 	fmt.Println("4. All errors.Report() calls will now go to Sentry!")

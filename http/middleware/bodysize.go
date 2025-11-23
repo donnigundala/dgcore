@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/donnigundala/dgcore/errors"
+	"github.com/donnigundala/dg-core/errors"
 )
 
 // BodySizeLimit returns a middleware that limits the request body size.

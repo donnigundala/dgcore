@@ -1,6 +1,6 @@
 package http
 
-import contractHTTP "github.com/donnigundala/dgcore/contracts/http"
+import contractHTTP "github.com/donnigundala/dg-core/contracts/http"
 
 // NewRouter creates a new router instance.
 // By default, this returns a Gin-based router for better performance and features.

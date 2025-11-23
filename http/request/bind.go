@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/donnigundala/dgcore/validation"
+	"github.com/donnigundala/dg-core/validation"
 )
 
 // Bind binds request data to a struct based on Content-Type.

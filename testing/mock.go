@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/donnigundala/dgcore/logging"
+	"github.com/donnigundala/dg-core/logging"
 )
 
 // MockContainer is a simple mock container for testing.

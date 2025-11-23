@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/donnigundala/dgcore/ctxutil"
+	"github.com/donnigundala/dg-core/ctxutil"
 )
 
 // RequestIDMiddleware injects a unique request ID and a context-aware logger into each request.

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/donnigundala/dgcore/container"
-	contractContainer "github.com/donnigundala/dgcore/contracts/container"
-	"github.com/donnigundala/dgcore/contracts/foundation"
+	"github.com/donnigundala/dg-core/container"
+	contractContainer "github.com/donnigundala/dg-core/contracts/container"
+	"github.com/donnigundala/dg-core/contracts/foundation"
 )
 
 // Application is the central struct of the framework.

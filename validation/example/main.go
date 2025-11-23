@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/donnigundala/dgcore/http/response"
-	"github.com/donnigundala/dgcore/validation"
+	"github.com/donnigundala/dg-core/http/response"
+	"github.com/donnigundala/dg-core/validation"
 )
 
 // CreateUserRequest represents the request body for creating a user.

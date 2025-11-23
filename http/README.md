@@ -76,8 +76,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/donnigundala/dgcore/config"
-	"github.com/donnigundala/dgcore/server"
+	"github.com/donnigundala/dg-core/config"
+	"github.com/donnigundala/dg-core/server"
 )
 
 func main() {

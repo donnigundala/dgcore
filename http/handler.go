@@ -3,7 +3,7 @@ package http
 import (
 	"net/http"
 
-	"github.com/donnigundala/dgcore/ctxutil"
+	"github.com/donnigundala/dg-core/ctxutil"
 )
 
 // HandlerFunc is a custom handler function type that handles HTTP requests and can return an error.

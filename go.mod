@@ -3,7 +3,6 @@ module github.com/donnigundala/dg-core
 go 1.24.0
 
 require (
-	github.com/donnigundala/dgcore v1.1.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/validator/v10 v10.20.0
 	github.com/google/uuid v1.6.0

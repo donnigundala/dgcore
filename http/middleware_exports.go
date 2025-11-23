@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/donnigundala/dgcore/http/middleware"
-	"github.com/donnigundala/dgcore/logging"
+	"github.com/donnigundala/dg-core/http/middleware"
+	"github.com/donnigundala/dg-core/logging"
 )
 
 // Middleware exports - make middleware accessible from http package

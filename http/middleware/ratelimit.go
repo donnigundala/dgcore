@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/donnigundala/dgcore/errors"
+	"github.com/donnigundala/dg-core/errors"
 )
 
 // RateLimitConfig defines the configuration for rate limiting middleware.

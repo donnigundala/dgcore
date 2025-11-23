@@ -3,7 +3,7 @@ package response
 import (
 	"net/http"
 
-	"github.com/donnigundala/dgcore/errors"
+	"github.com/donnigundala/dg-core/errors"
 )
 
 // ErrorResponse represents an error API response.

@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/donnigundala/dgcore/contracts/foundation"
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
-	dghttp "github.com/donnigundala/dgcore/http"
+	"github.com/donnigundala/dg-core/contracts/foundation"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
+	dghttp "github.com/donnigundala/dg-core/http"
 )
 
 // MockApplication is a mock implementation of foundation.Application

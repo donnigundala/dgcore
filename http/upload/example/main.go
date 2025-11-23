@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/donnigundala/dgcore/http/response"
-	"github.com/donnigundala/dgcore/http/upload"
+	"github.com/donnigundala/dg-core/http/response"
+	"github.com/donnigundala/dg-core/http/upload"
 )
 
 func main() {

@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/donnigundala/dgcore/config"
-	contractshttp "github.com/donnigundala/dgcore/contracts/http"
-	"github.com/donnigundala/dgcore/ctxutil"
-	"github.com/donnigundala/dgcore/foundation"
-	server "github.com/donnigundala/dgcore/http"
+	"github.com/donnigundala/dg-core/config"
+	contractshttp "github.com/donnigundala/dg-core/contracts/http"
+	"github.com/donnigundala/dg-core/ctxutil"
+	"github.com/donnigundala/dg-core/foundation"
+	server "github.com/donnigundala/dg-core/http"
 )
 
 func main() {
@@ -92,7 +92,7 @@ func main() {
 	// Kernel.Bootstrap() calls app.Boot().
 
 	// Let's do it right. Let's verify if we can easily use foundation.New().
-	// We need to import "github.com/donnigundala/dgcore/foundation".
+	// We need to import "github.com/donnigundala/dg-core/foundation".
 
 	// For now, let's just use the router directly as before, but wrapped in Kernel if possible?
 	// Or better, let's just manually construct the Kernel with a mock app or similar?

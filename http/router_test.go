@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
-	dghttp "github.com/donnigundala/dgcore/http"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
+	dghttp "github.com/donnigundala/dg-core/http"
 )
 
 func TestRouter_BasicRoutes(t *testing.T) {

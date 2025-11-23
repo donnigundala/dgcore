@@ -13,10 +13,10 @@ The `validation` package provides a robust, flexible, and production-grade solut
 
 ## Installation
 
-This package is part of the `dgcore` framework. Ensure you have `dgcore` installed:
+This package is part of the `dg-core` framework. Ensure you have `dg-core` installed:
 
 ```bash
-go get github.com/donnigundala/dgcore
+go get github.com/donnigundala/dg-core
 ```
 
 ## Usage
@@ -51,7 +51,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/donnigundala/dgcore/validation"
+	"github.com/donnigundala/dg-core/validation"
 	"github.com/go-playground/validator/v10"
 )
 

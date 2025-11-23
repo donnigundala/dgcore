@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/donnigundala/dgcore/validation"
+	"github.com/donnigundala/dg-core/validation"
 )
 
 // JSON decodes the request body as JSON into the given value.

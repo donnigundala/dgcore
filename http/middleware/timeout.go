@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/donnigundala/dgcore/errors"
+	"github.com/donnigundala/dg-core/errors"
 )
 
 // Timeout returns a middleware that times out requests after the specified duration.

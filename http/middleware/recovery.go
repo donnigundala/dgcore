@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/donnigundala/dgcore/errors"
-	"github.com/donnigundala/dgcore/logging"
+	"github.com/donnigundala/dg-core/errors"
+	"github.com/donnigundala/dg-core/logging"
 )
 
 // Recovery returns a middleware that recovers from panics.

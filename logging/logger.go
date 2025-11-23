@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/donnigundala/dgcore/ctxutil"
+	"github.com/donnigundala/dg-core/ctxutil"
 )
 
 // Logger wraps slog.Logger with additional functionality.

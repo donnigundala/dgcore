@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
 )
 
 // HTTPClient is a test HTTP client for making requests to a router.

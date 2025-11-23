@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
 )
 
 // Router is the concrete implementation of the Router interface.

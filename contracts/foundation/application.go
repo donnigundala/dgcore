@@ -1,7 +1,7 @@
 package foundation
 
 import (
-	"github.com/donnigundala/dgcore/contracts/container"
+	"github.com/donnigundala/dg-core/contracts/container"
 )
 
 // Application is the interface for the application.

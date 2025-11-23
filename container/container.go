@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/donnigundala/dgcore/contracts/container"
+	"github.com/donnigundala/dg-core/contracts/container"
 )
 
 // Container is the interface for the dependency injection container.

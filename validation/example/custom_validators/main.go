@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/donnigundala/dgcore/validation"
+	"github.com/donnigundala/dg-core/validation"
 )
 
 // UserRegistration demonstrates custom validators

@@ -3,9 +3,9 @@ package foundation_test
 import (
 	"testing"
 
-	"github.com/donnigundala/dgcore/contracts/container"
-	"github.com/donnigundala/dgcore/contracts/foundation"
-	foundationImpl "github.com/donnigundala/dgcore/foundation"
+	"github.com/donnigundala/dg-core/contracts/container"
+	"github.com/donnigundala/dg-core/contracts/foundation"
+	foundationImpl "github.com/donnigundala/dg-core/foundation"
 )
 
 // MockService is a simple service for testing.

@@ -3,7 +3,7 @@ package http
 import (
 	"net/http"
 
-	contractHTTP "github.com/donnigundala/dgcore/contracts/http"
+	contractHTTP "github.com/donnigundala/dg-core/contracts/http"
 )
 
 // ginRoute implements the Route interface for Gin routes.
