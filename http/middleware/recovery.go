@@ -15,7 +15,7 @@ func Recovery(logger *logging.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					// Log the panic with stack trace
+					// Log the panic with stack trace (internal logging)
 					stack := string(debug.Stack())
 
 					logger.ErrorContext(r.Context(), "Panic recovered",
@@ -29,6 +29,13 @@ func Recovery(logger *logging.Logger) func(http.Handler) http.Handler {
 					wrappedErr := errors.New(fmt.Sprintf("internal server error: %v", err)).
 						WithCode("PANIC_RECOVERED").
 						WithStatus(http.StatusInternalServerError)
+
+					// Report to external service (if configured)
+					errors.Report(wrappedErr, map[string]interface{}{
+						"method": r.Method,
+						"path":   r.URL.Path,
+						"stack":  stack,
+					})
 
 					// Write error response
 					errors.WriteHTTPError(w, wrappedErr)
