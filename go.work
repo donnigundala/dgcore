@@ -9,7 +9,6 @@ use (
 	./foundation
 	./http
 	./logging
-	./skeleton
 	./testing
 	./validation
 )
