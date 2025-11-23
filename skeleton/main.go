@@ -138,30 +138,13 @@ func main() {
 
 	logger.Debug("Routes registered successfully")
 
-	// Bind the HTTP Kernel
-	app.Singleton("kernel", func() interface{} {
-		routerInstance, err := app.Make("router")
-		if err != nil {
-			wrappedErr := errors.Wrap(err, "failed to resolve router for kernel")
-			logger.Error("Kernel initialization failed", "error", wrappedErr)
-			panic(wrappedErr)
-		}
-		router := routerInstance.(http.Router)
-		return coreHTTP.NewKernel(app, router)
-	})
+	// Create HTTP Kernel directly (avoid circular dependency)
+	kernel := coreHTTP.NewKernel(app, router)
 
 	// Start HTTP Server
-	kernelInstance, err := app.Make("kernel")
-	if err != nil {
-		wrappedErr := errors.Wrap(err, "failed to resolve kernel").
-			WithCode("KERNEL_RESOLUTION_FAILED").
-			WithStatus(500)
-		logger.Error("Failed to resolve kernel", "error", wrappedErr)
-		os.Exit(1)
-	}
-
 	addr := fmt.Sprintf(":%d", appConfig.Port)
-	server := coreHTTP.NewHTTPServer(coreHTTP.Config{Addr: addr}, kernelInstance.(http.Kernel))
+	logger.Info("Starting HTTP server", "port", appConfig.Port)
+	server := coreHTTP.NewHTTPServer(coreHTTP.Config{Addr: addr}, kernel)
 
 	// Register server shutdown hook
 	app.RegisterShutdownHook(func() {
