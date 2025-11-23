@@ -13,16 +13,17 @@ import (
 	coreHTTP "github.com/donnigundala/dgcore/http"
 	"github.com/donnigundala/dgcore/http/health"
 	"github.com/donnigundala/dgcore/logging"
+	"github.com/donnigundala/dgcore/validation"
 
 	"example-app/routes"
 )
 
-// AppConfig represents the application configuration
+// AppConfig represents the application configuration with validation.
 type AppConfig struct {
-	Name  string `mapstructure:"name"`
-	Env   string `mapstructure:"env"`
+	Name  string `mapstructure:"name" validate:"required,min=3"`
+	Env   string `mapstructure:"env" validate:"required,oneof=development staging production"`
 	Debug bool   `mapstructure:"debug"`
-	Port  int    `mapstructure:"port"`
+	Port  int    `mapstructure:"port" validate:"required,gte=1,lte=65535"`
 }
 
 func main() {
@@ -51,6 +52,19 @@ func main() {
 		logger.Error("Failed to load app configuration", "error", err)
 		os.Exit(1)
 	}
+
+	// Validate configuration
+	validator := validation.NewValidator()
+	if err := validator.ValidateStruct(context.Background(), &appConfig); err != nil {
+		if valErr, ok := err.(*validation.Error); ok {
+			logger.Error("Configuration validation failed", "errors", valErr.Errors)
+		} else {
+			logger.Error("Configuration validation failed", "error", err)
+		}
+		os.Exit(1)
+	}
+
+	logger.Info("Configuration validated successfully")
 
 	// Use debug level if debug mode is enabled
 	if appConfig.Debug {
