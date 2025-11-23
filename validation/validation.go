@@ -33,9 +33,25 @@ type Option func(*Validator)
 // defaultMessages returns a map of default validation messages for the "en" locale.
 func defaultMessages() map[string]string {
 	return map[string]string{
+		// Standard validators
 		"required": "is required",
 		"email":    "is not a valid email format",
 		"gte":      "must be greater than or equal to %s",
+		"lte":      "must be less than or equal to %s",
+		"min":      "must be at least %s characters",
+		"max":      "must be at most %s characters",
+
+		// Custom validators
+		"uuid":        "must be a valid UUID",
+		"slug":        "must be a valid URL slug (lowercase letters, numbers, hyphens)",
+		"phone":       "must be a valid phone number",
+		"password":    "must be at least 8 characters with uppercase, lowercase, and number",
+		"username":    "must be 3-20 characters (letters, numbers, underscores, hyphens)",
+		"alpha_space": "must contain only letters and spaces",
+		"no_sql":      "contains invalid characters",
+		"no_xss":      "contains invalid characters",
+		"color_hex":   "must be a valid hex color code (e.g., #FFF or #FFFFFF)",
+		"timezone":    "must be a valid timezone (e.g., UTC, America/New_York)",
 	}
 }
 
@@ -91,6 +107,9 @@ func NewValidator(opts ...Option) IValidator {
 		defaultLocale: "en",   // Sensible default
 		fieldNameTag:  "json", // Sensible default
 	}
+
+	// Register built-in custom validators
+	registerCustomValidators(v.validate)
 
 	// Load the framework's default messages for the default locale.
 	v.messages[v.defaultLocale] = defaultMessages()
