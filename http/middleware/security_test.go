@@ -43,7 +43,7 @@ func TestSecurityHeaders_CustomConfig(t *testing.T) {
 	config := middleware.SecurityConfig{
 		XFrameOptions:         "SAMEORIGIN",
 		XContentTypeOptions:   "nosniff",
-		XXSSProtection:        "0",
+		XSSProtection:         "0",
 		HSTSMaxAge:            63072000,
 		HSTSIncludeSubdomains: false,
 		ContentSecurityPolicy: "default-src 'self'",
