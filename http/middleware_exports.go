@@ -84,3 +84,16 @@ func CompressWithDefault() func(http.Handler) http.Handler {
 func DefaultCompressConfig() middleware.CompressConfig {
 	return middleware.DefaultCompressConfig()
 }
+
+// Logger middleware
+func Logger(config middleware.LoggerConfig) func(http.Handler) http.Handler {
+	return middleware.Logger(config)
+}
+
+func LoggerWithDefault() func(http.Handler) http.Handler {
+	return middleware.LoggerWithDefault()
+}
+
+func DefaultLoggerConfig() middleware.LoggerConfig {
+	return middleware.DefaultLoggerConfig()
+}
