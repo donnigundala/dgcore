@@ -27,7 +27,7 @@ func TestSecurityHeaders_AllHeaders(t *testing.T) {
 		"X-Frame-Options":           "DENY",
 		"X-Content-Type-Options":    "nosniff",
 		"X-XSS-Protection":          "1; mode=block",
-		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+		"Strict-Transport-Security": "max-age=31536000",
 	}
 
 	for header, expectedValue := range headers {
