@@ -51,7 +51,7 @@ func TestRouter_BasicRoutes(t *testing.T) {
 func TestRouter_Parameters(t *testing.T) {
 	router := dghttp.NewRouter()
 
-	router.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/users/:id", func(w http.ResponseWriter, r *http.Request) {
 		// In a real implementation, we would extract params from context
 		w.Write([]byte("User ID"))
 	})
