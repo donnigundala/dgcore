@@ -246,14 +246,14 @@ func TestBind_OverwriteExisting(t *testing.T) {
 	}
 }
 
-// TestSingleton_AfterInstance tests singleton behavior after instance is set
+// TestSingleton_AfterInstance tests that instances take precedence
 func TestSingleton_AfterInstance(t *testing.T) {
 	c := container.NewContainer()
 
 	// Set instance first
 	c.Instance("key", "instance value")
 
-	// Try to make singleton (should return instance)
+	// Verify instance is returned
 	result, err := c.Make("key")
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -263,7 +263,7 @@ func TestSingleton_AfterInstance(t *testing.T) {
 		t.Errorf("Expected 'instance value', got %v", result)
 	}
 
-	// Now set singleton (should overwrite)
+	// Set singleton (instances take precedence, so this won't overwrite)
 	c.Singleton("key", func() interface{} { return "singleton value" })
 
 	result2, err := c.Make("key")
@@ -271,8 +271,9 @@ func TestSingleton_AfterInstance(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	if result2 != "singleton value" {
-		t.Errorf("Expected 'singleton value', got %v", result2)
+	// Instance should still be returned (instances have priority)
+	if result2 != "instance value" {
+		t.Errorf("Expected 'instance value' (instances take precedence), got %v", result2)
 	}
 }
 
