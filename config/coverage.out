@@ -96,8 +96,8 @@ github.com/donnigundala/dg-core/config/inject.go:63.16,65.3 1 1
 github.com/donnigundala/dg-core/config/inject.go:66.2,66.31 1 1
 github.com/donnigundala/dg-core/config/inject.go:70.68,72.25 2 1
 github.com/donnigundala/dg-core/config/inject.go:72.25,74.26 2 1
-github.com/donnigundala/dg-core/config/inject.go:75.23,76.46 1 0
-github.com/donnigundala/dg-core/config/inject.go:76.46,78.5 1 0
+github.com/donnigundala/dg-core/config/inject.go:75.23,76.46 1 1
+github.com/donnigundala/dg-core/config/inject.go:76.46,78.5 1 1
 github.com/donnigundala/dg-core/config/inject.go:79.11,80.17 1 1
 github.com/donnigundala/dg-core/config/inject.go:83.2,83.12 1 1
 github.com/donnigundala/dg-core/config/inject.go:87.64,90.29 3 1
