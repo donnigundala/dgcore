@@ -26,3 +26,21 @@ type PluginProvider interface {
 	// Dependencies returns a list of plugin names this plugin depends on
 	Dependencies() []string
 }
+
+// BeforeRegisterProvider is an optional interface for providers that need
+// to perform actions before registration.
+type BeforeRegisterProvider interface {
+	BeforeRegister(app Application) error
+}
+
+// AfterBootProvider is an optional interface for providers that need
+// to perform actions after boot.
+type AfterBootProvider interface {
+	AfterBoot(app Application) error
+}
+
+// ShutdownProvider is an optional interface for providers that need
+// to perform cleanup during application shutdown.
+type ShutdownProvider interface {
+	Shutdown(app Application) error
+}

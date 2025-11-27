@@ -44,9 +44,30 @@ func (app *Application) Register(provider foundation.ServiceProvider) error {
 		return fmt.Errorf("config injection failed for provider: %w", err)
 	}
 
+	// Check for BeforeRegister hook
+	if hook, ok := provider.(foundation.BeforeRegisterProvider); ok {
+		if err := hook.BeforeRegister(app); err != nil {
+			return fmt.Errorf("BeforeRegister hook failed: %w", err)
+		}
+	}
+
 	// Register the provider
 	if err := provider.Register(app); err != nil {
 		return err
+	}
+
+	// Check for Shutdown hook
+	if hook, ok := provider.(foundation.ShutdownProvider); ok {
+		app.RegisterShutdownHook(func() {
+			if err := hook.Shutdown(app); err != nil {
+				// Log error if logger is available, otherwise just print to stderr
+				if logger := app.Log(); logger != nil {
+					logger.Error("Provider shutdown failed", "error", err)
+				} else {
+					fmt.Fprintf(os.Stderr, "Provider shutdown failed: %v\n", err)
+				}
+			}
+		})
 	}
 
 	// Add to providers list only after successful registration
@@ -56,6 +77,13 @@ func (app *Application) Register(provider foundation.ServiceProvider) error {
 	if app.booted {
 		if err := provider.Boot(app); err != nil {
 			return fmt.Errorf("failed to boot provider: %w", err)
+		}
+
+		// Check for AfterBoot hook (since we just booted)
+		if hook, ok := provider.(foundation.AfterBootProvider); ok {
+			if err := hook.AfterBoot(app); err != nil {
+				return fmt.Errorf("AfterBoot hook failed: %w", err)
+			}
 		}
 	}
 
@@ -71,6 +99,15 @@ func (app *Application) Boot() error {
 	for _, provider := range app.providers {
 		if err := provider.Boot(app); err != nil {
 			return fmt.Errorf("failed to boot provider: %w", err)
+		}
+	}
+
+	// Run AfterBoot hooks
+	for _, provider := range app.providers {
+		if hook, ok := provider.(foundation.AfterBootProvider); ok {
+			if err := hook.AfterBoot(app); err != nil {
+				return fmt.Errorf("AfterBoot hook failed: %w", err)
+			}
 		}
 	}
 
