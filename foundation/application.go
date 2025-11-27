@@ -37,14 +37,19 @@ func New(basePath string) *Application {
 	return app
 }
 
-// Register registers a service provider with the application.
+// Register registers a service provider.
 func (app *Application) Register(provider foundation.ServiceProvider) error {
-	// Register the provider first - if this fails, we don't add it to the list
-	if err := provider.Register(app); err != nil {
-		return fmt.Errorf("failed to register provider: %w", err)
+	// Auto-inject configuration if provider has config fields
+	if err := InjectProviderConfig(provider); err != nil {
+		return fmt.Errorf("config injection failed for provider: %w", err)
 	}
 
-	// Only add to providers list after successful registration
+	// Register the provider
+	if err := provider.Register(app); err != nil {
+		return err
+	}
+
+	// Add to providers list only after successful registration
 	app.providers = append(app.providers, provider)
 
 	// If app is already booted, boot this provider immediately
