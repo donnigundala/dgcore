@@ -146,6 +146,26 @@ func (app *Application) HasProvider(name string) bool {
 	return app.HasPlugin(name)
 }
 
+// RegisterPlugin registers a plugin provider with validation.
+// It prevents duplicate plugin registrations by checking if a plugin
+// with the same name is already registered.
+//
+// Example:
+//
+//	plugin := NewSlowQueryPlugin(config)
+//	if err := app.RegisterPlugin(plugin); err != nil {
+//	    return fmt.Errorf("failed to register plugin: %w", err)
+//	}
+func (app *Application) RegisterPlugin(plugin foundation.PluginProvider) error {
+	// Validate: prevent duplicate registration
+	if app.HasPlugin(plugin.Name()) {
+		return fmt.Errorf("plugin '%s' is already registered", plugin.Name())
+	}
+
+	// Register as a normal service provider
+	return app.Register(plugin)
+}
+
 // Log returns the application logger.
 // This assumes a logger is bound to the container, or falls back to default.
 func (app *Application) Log() *slog.Logger {
