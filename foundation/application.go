@@ -39,12 +39,15 @@ func New(basePath string) *Application {
 
 // Register registers a service provider with the application.
 func (app *Application) Register(provider foundation.ServiceProvider) error {
-	app.providers = append(app.providers, provider)
-
+	// Register the provider first - if this fails, we don't add it to the list
 	if err := provider.Register(app); err != nil {
 		return fmt.Errorf("failed to register provider: %w", err)
 	}
 
+	// Only add to providers list after successful registration
+	app.providers = append(app.providers, provider)
+
+	// If app is already booted, boot this provider immediately
 	if app.booted {
 		if err := provider.Boot(app); err != nil {
 			return fmt.Errorf("failed to boot provider: %w", err)
@@ -117,9 +120,9 @@ func (app *Application) GetProviders() []foundation.ServiceProvider {
 	return providers
 }
 
-// HasProvider checks if a provider with the given name is registered.
-// This only works for providers that implement PluginProvider interface.
-func (app *Application) HasProvider(name string) bool {
+// HasPlugin checks if a plugin with the given name is registered.
+// Only providers implementing PluginProvider (with Name/Version/Dependencies) are checked.
+func (app *Application) HasPlugin(name string) bool {
 	for _, p := range app.providers {
 		if plugin, ok := p.(foundation.PluginProvider); ok {
 			if plugin.Name() == name {
@@ -128,6 +131,14 @@ func (app *Application) HasProvider(name string) bool {
 		}
 	}
 	return false
+}
+
+// HasProvider is deprecated. Use HasPlugin instead.
+// This method is kept for backward compatibility and will be removed in v2.0.
+//
+// Deprecated: Use HasPlugin instead.
+func (app *Application) HasProvider(name string) bool {
+	return app.HasPlugin(name)
 }
 
 // Log returns the application logger.

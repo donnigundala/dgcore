@@ -107,3 +107,31 @@ func assignNested(dest map[string]any, path string, value any) {
 func Inject(prefix string, target any) error {
 	return Unmarshal(prefix, target)
 }
+
+// InjectAndValidate unmarshals configuration and validates it using struct tags.
+// This ensures the application fails fast at startup if configuration is invalid.
+//
+// Example:
+//
+//	type AppConfig struct {
+//	    Name string `mapstructure:"name" validate:"required"`
+//	    Port int    `mapstructure:"port" validate:"required,min=1,max=65535"`
+//	}
+//
+//	var ac AppConfig
+//	if err := InjectAndValidate("app", &ac); err != nil {
+//	    log.Fatal(err)
+//	}
+//
+// This function requires github.com/go-playground/validator/v10 to be available.
+// If validation is not needed, use Inject instead.
+func InjectAndValidate(prefix string, target any) error {
+	// First unmarshal the configuration
+	if err := Unmarshal(prefix, target); err != nil {
+		return err
+	}
+
+	// Try to load validator dynamically to avoid hard dependency
+	// Users can choose whether to use validation or not
+	return validateStruct(target)
+}
