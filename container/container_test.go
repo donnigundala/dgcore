@@ -332,3 +332,111 @@ func TestInstance_NilValue(t *testing.T) {
 		t.Errorf("Expected nil, got %v", result)
 	}
 }
+
+// TestMake_PanicRecovery tests that panics in resolvers are caught and returned as errors
+func TestMake_PanicRecovery(t *testing.T) {
+	c := container.NewContainer()
+
+	// Bind a resolver that panics
+	c.Bind("panicky", func() interface{} {
+		panic("resolver panic")
+	})
+
+	instance, err := c.Make("panicky")
+
+	// Should not crash, should return error
+	if instance != nil {
+		t.Errorf("Expected nil instance after panic, got %v", instance)
+	}
+
+	if err == nil {
+		t.Fatal("Expected error after panic, got nil")
+	}
+
+	// Error message should contain key and panic message
+	expectedSubstrings := []string{"panic while resolving", "panicky", "resolver panic"}
+	for _, substr := range expectedSubstrings {
+		if !contains(err.Error(), substr) {
+			t.Errorf("Expected error to contain '%s', got: %s", substr, err.Error())
+		}
+	}
+}
+
+// TestMake_PanicWithDifferentTypes tests panic recovery with different panic types
+func TestMake_PanicWithDifferentTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		panicValue  interface{}
+		expectedErr string
+	}{
+		{"string panic", "string error", "string error"},
+		{"int panic", 42, "42"},
+		{"struct panic", struct{ Msg string }{"struct error"}, "{struct error}"},
+		{"nil panic", nil, "panic called with nil argument"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := container.NewContainer()
+
+			c.Bind("test", func() interface{} {
+				panic(tt.panicValue)
+			})
+
+			instance, err := c.Make("test")
+
+			if instance != nil {
+				t.Errorf("Expected nil instance, got %v", instance)
+			}
+
+			if err == nil {
+				t.Fatal("Expected error, got nil")
+			}
+
+			if !contains(err.Error(), tt.expectedErr) {
+				t.Errorf("Expected error to contain '%s', got: %s", tt.expectedErr, err.Error())
+			}
+		})
+	}
+}
+
+// TestMake_PanicInSingleton tests that panics in singleton resolvers are handled
+func TestMake_PanicInSingleton(t *testing.T) {
+	c := container.NewContainer()
+
+	c.Singleton("panicky_singleton", func() interface{} {
+		panic("singleton panic")
+	})
+
+	// First call should catch panic
+	instance1, err1 := c.Make("panicky_singleton")
+	if instance1 != nil {
+		t.Errorf("Expected nil instance, got %v", instance1)
+	}
+	if err1 == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	// Second call should also fail (panic prevented caching)
+	instance2, err2 := c.Make("panicky_singleton")
+	if instance2 != nil {
+		t.Errorf("Expected nil instance on second call, got %v", instance2)
+	}
+	if err2 == nil {
+		t.Fatal("Expected error on second call, got nil")
+	}
+}
+
+// Helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && stringContains(s, substr))
+}
+
+func stringContains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

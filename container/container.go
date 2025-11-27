@@ -228,10 +228,28 @@ func (c *containerImpl) Instance(key string, instance interface{}) {
 //	    // Handle error: binding not found
 //	}
 //
+// Panic Recovery: If a resolver function panics during execution, Make will
+// recover from the panic and return it as an error instead of crashing the
+// application. This ensures production safety:
+//
+//	c.Bind("bad", func() interface{} {
+//	    panic("something went wrong")
+//	})
+//	instance, err := c.Make("bad")
+//	// err will contain: "panic while resolving 'bad': something went wrong"
+//
 // Thread Safety: Make is safe for concurrent use. For singleton bindings,
 // double-checked locking ensures only one instance is created even when
 // called concurrently.
-func (c *containerImpl) Make(key string) (interface{}, error) {
+func (c *containerImpl) Make(key string) (instance interface{}, err error) {
+	// Panic recovery - convert panics to errors for production safety
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic while resolving '%s': %v", key, r)
+			instance = nil
+		}
+	}()
+
 	c.mu.RLock()
 	if instance, ok := c.instances[key]; ok {
 		c.mu.RUnlock()
