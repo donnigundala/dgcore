@@ -44,3 +44,12 @@ type AfterBootProvider interface {
 type ShutdownProvider interface {
 	Shutdown(app Application) error
 }
+
+// CommandProvider is an optional interface for providers that want to
+// register console commands.
+type CommandProvider interface {
+	// Commands returns a list of console commands to register.
+	// We use interface{} here to avoid circular dependencies with the console package,
+	// but the expected type is []console.Command.
+	Commands() []interface{}
+}

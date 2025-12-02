@@ -97,6 +97,15 @@ func (app *Application) Boot() error {
 	}
 
 	for _, provider := range app.providers {
+		// Validate plugin dependencies
+		if plugin, ok := provider.(foundation.PluginProvider); ok {
+			for _, dep := range plugin.Dependencies() {
+				if !app.HasPlugin(dep) {
+					return fmt.Errorf("plugin '%s' requires dependency '%s', which is not registered", plugin.Name(), dep)
+				}
+			}
+		}
+
 		if err := provider.Boot(app); err != nil {
 			return fmt.Errorf("failed to boot provider: %w", err)
 		}
